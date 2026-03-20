@@ -23,4 +23,34 @@ export async function adminRoutes(app: FastifyInstance) {
       return { data: jobs, meta: { count: jobs.length } };
     }
   );
+
+  app.post(
+    "/dlq/:jobId/retry",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Reintentar un job fallido de la Dead Letter Queue",
+        params: {
+          type: "object",
+          properties: { jobId: { type: "string" } },
+          required: ["jobId"],
+        },
+      },
+    },
+    async (req, reply) => {
+      const { jobId } = req.params as { jobId: string };
+      try {
+        await eventBus.retryJob(jobId);
+        return reply.status(200).send({ data: { jobId, status: "retried" } });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return reply.status(404).send({
+          error: "NotFound",
+          message,
+          statusCode: 404,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+  );
 }

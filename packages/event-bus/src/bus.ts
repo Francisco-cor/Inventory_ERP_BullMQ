@@ -1,4 +1,4 @@
-import { Queue, Worker } from "bullmq";
+import { Queue, Worker, Job } from "bullmq";
 import { randomUUID } from "node:crypto";
 import type { DomainEvent, EventName, ServiceName } from "@erp/shared-types";
 
@@ -115,12 +115,18 @@ export function createEventBus(config: EventBusConfig) {
     }));
   }
 
+  async function retryJob(jobId: string): Promise<void> {
+    const job = await Job.fromId(myQueue, jobId);
+    if (!job) throw new Error(`Job ${jobId} not found in queue ${queueName(serviceName)}`);
+    await job.retry("failed");
+  }
+
   async function close(): Promise<void> {
     await worker?.close();
     await Promise.all([...publishQueues.values()].map((q) => q.close()));
   }
 
-  return { publish, subscribe, startWorker, getFailedJobs, close };
+  return { publish, subscribe, startWorker, getFailedJobs, retryJob, close };
 }
 
 export type EventBus = ReturnType<typeof createEventBus>;

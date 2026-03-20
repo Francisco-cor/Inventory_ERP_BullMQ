@@ -5,6 +5,7 @@ import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { healthRoutes } from "./routes/health.js";
 import { obsRoutes } from "./routes/obs.js";
+import { adminRoutes } from "./routes/admin.js";
 import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
 import { startSlaChecker, stopSlaChecker } from "./jobs/sla-checker.js";
@@ -49,6 +50,7 @@ async function bootstrap(): Promise<void> {
 
   await app.register(healthRoutes);
   await app.register(obsRoutes, { prefix: "/api/v1/obs" });
+  await app.register(adminRoutes, { prefix: "/admin" });
 
   startEventConsumer();
   await startSlaChecker({ host: REDIS_HOST, port: REDIS_PORT });
