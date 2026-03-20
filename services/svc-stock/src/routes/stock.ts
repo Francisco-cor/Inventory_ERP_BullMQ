@@ -13,7 +13,11 @@ async function registrarAlertaSiCorresponde(
   const tipo = disponible === 0 ? "stock_agotado" : "stock_bajo";
   await pool.query(
     `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
-     VALUES ($1, $2, $3, $4, $5)`,
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (producto_id) WHERE resuelta = false
+     DO UPDATE SET nivel_actual = EXCLUDED.nivel_actual,
+                   tipo         = EXCLUDED.tipo,
+                   creada_en    = NOW()`,
     [productoId, sku, disponible, STOCK_UMBRAL, tipo]
   );
 }

@@ -11,21 +11,11 @@ import { eventBus } from "./bus.js";
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
 async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query(
-      "SELECT event_id FROM eventos_recibidos WHERE event_id = $1",
-      [eventId]
-    );
-    if (rows.length > 0) return true;
-    await client.query(
-      "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2)",
-      [eventId, eventName]
-    );
-    return false;
-  } finally {
-    client.release();
-  }
+  const { rowCount } = await pool.query(
+    "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2) ON CONFLICT (event_id) DO NOTHING",
+    [eventId, eventName]
+  );
+  return (rowCount ?? 0) === 0;
 }
 
 // orden.creada → intentar reservar stock
@@ -94,39 +84,45 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
     }
 
     await client.query("COMMIT");
-
-    await publishEvent(
-      EVENTS.STOCK_RESERVADO,
-      {
-        ordenId: orden.id,
-        items: orden.lineas.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
-      },
-      event.correlationId
-    );
-
-    // Check stock alert thresholds after reservation
-    for (const linea of orden.lineas) {
-      const { rows: s } = await client.query(
-        "SELECT disponible, sku FROM stock WHERE producto_id = $1",
-        [linea.productoId]
-      );
-      if (s.length > 0 && s[0].disponible < STOCK_UMBRAL) {
-        const tipo = s[0].disponible === 0 ? "stock_agotado" : "stock_bajo";
-        await client.query(
-          `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [linea.productoId, s[0].sku, s[0].disponible, STOCK_UMBRAL, tipo]
-        );
-      }
-    }
-
-    console.log(`[consumer:stock] Stock reservado para orden ${orden.id}`);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
   } finally {
     client.release();
   }
+
+  // Post-transaction: publish and check alert thresholds independently.
+  // These run outside the reservation transaction so a failure here does not
+  // cause a spurious ROLLBACK of an already-committed reservation.
+  await publishEvent(
+    EVENTS.STOCK_RESERVADO,
+    {
+      ordenId: orden.id,
+      items: orden.lineas.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
+    },
+    event.correlationId
+  );
+
+  for (const linea of orden.lineas) {
+    const { rows: s } = await pool.query(
+      "SELECT disponible, sku FROM stock WHERE producto_id = $1",
+      [linea.productoId]
+    );
+    if (s.length > 0 && s[0].disponible < STOCK_UMBRAL) {
+      const tipo = s[0].disponible === 0 ? "stock_agotado" : "stock_bajo";
+      await pool.query(
+        `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (producto_id) WHERE resuelta = false
+         DO UPDATE SET nivel_actual = EXCLUDED.nivel_actual,
+                       tipo         = EXCLUDED.tipo,
+                       creada_en    = NOW()`,
+        [linea.productoId, s[0].sku, s[0].disponible, STOCK_UMBRAL, tipo]
+      );
+    }
+  }
+
+  console.log(`[consumer:stock] Stock reservado para orden ${orden.id}`);
 }
 
 // orden.cancelada → liberar reservas

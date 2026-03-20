@@ -9,21 +9,11 @@ import { publishEvent } from "./publisher.js";
 import { eventBus } from "./bus.js";
 
 async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query(
-      "SELECT event_id FROM eventos_recibidos WHERE event_id = $1",
-      [eventId]
-    );
-    if (rows.length > 0) return true;
-    await client.query(
-      "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2)",
-      [eventId, eventName]
-    );
-    return false;
-  } finally {
-    client.release();
-  }
+  const { rowCount } = await pool.query(
+    "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2) ON CONFLICT (event_id) DO NOTHING",
+    [eventId, eventName]
+  );
+  return (rowCount ?? 0) === 0;
 }
 
 // stock.reservado → confirmar orden + emitir orden.confirmada
