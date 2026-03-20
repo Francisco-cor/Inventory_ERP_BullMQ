@@ -14,7 +14,10 @@ export async function runMigrations(client: pg.Client): Promise<void> {
   `);
 
   const migrationsDir = join(__dirname, "../../migrations");
-  const migrations = [{ version: "001_initial", file: "001_initial.sql" }];
+  const migrations = [
+    { version: "001_initial", file: "001_initial.sql" },
+    { version: "002_alertas", file: "002_alertas.sql" },
+  ];
 
   for (const migration of migrations) {
     const { rows } = await client.query(

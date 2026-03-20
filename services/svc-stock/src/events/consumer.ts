@@ -3,6 +3,8 @@ import type { DomainEvent, OrdenCreadaPayload, OrdenCanceladaPayload } from "@er
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
 
+const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
+
 const connection = {
   host: process.env.REDIS_HOST ?? "localhost",
   port: Number(process.env.REDIS_PORT ?? 6379),
@@ -96,6 +98,22 @@ export function startEventConsumer(): void {
                 },
                 event.correlationId
               );
+
+              // Registrar alertas para productos cuyo stock disponible cayó bajo el umbral
+              for (const linea of orden.lineas) {
+                const { rows: s } = await client.query(
+                  "SELECT disponible, sku FROM stock WHERE producto_id = $1",
+                  [linea.productoId]
+                );
+                if (s.length > 0 && s[0].disponible < STOCK_UMBRAL) {
+                  const tipo = s[0].disponible === 0 ? "stock_agotado" : "stock_bajo";
+                  await client.query(
+                    `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [linea.productoId, s[0].sku, s[0].disponible, STOCK_UMBRAL, tipo]
+                  );
+                }
+              }
 
               console.log(`[consumer] Stock reservado para orden ${orden.id}`);
             } catch (err) {

@@ -163,12 +163,13 @@ services:
     container_name: svc-stock
     restart: unless-stopped
     environment:
-      NODE_ENV:     production
-      PORT:         3003
-      DATABASE_URL: postgres://stock_user:stock_pass@postgres-stock:5432/stock_db
-      REDIS_HOST:   redis
-      REDIS_PORT:   6379
-      LOG_LEVEL:    info
+      NODE_ENV:              production
+      PORT:                  3003
+      DATABASE_URL:          postgres://stock_user:stock_pass@postgres-stock:5432/stock_db
+      REDIS_HOST:            redis
+      REDIS_PORT:            6379
+      LOG_LEVEL:             info
+      STOCK_ALERTA_UMBRAL:   10
     depends_on:
       postgres-stock:
         condition: service_healthy

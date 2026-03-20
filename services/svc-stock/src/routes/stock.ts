@@ -2,6 +2,22 @@ import type { FastifyInstance } from "fastify";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
 
+const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
+
+async function registrarAlertaSiCorresponde(
+  productoId: string,
+  sku: string,
+  disponible: number
+): Promise<void> {
+  if (disponible >= STOCK_UMBRAL) return;
+  const tipo = disponible === 0 ? "stock_agotado" : "stock_bajo";
+  await pool.query(
+    `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [productoId, sku, disponible, STOCK_UMBRAL, tipo]
+  );
+}
+
 export async function stockRoutes(app: FastifyInstance) {
   // GET /api/v1/stock
   app.get(
@@ -155,6 +171,13 @@ export async function stockRoutes(app: FastifyInstance) {
         await client.query("COMMIT");
 
         await publishEvent("stock.ajustado", { productoId, delta, motivo });
+
+        // Registrar alerta si el stock disponible cae bajo el umbral
+        await registrarAlertaSiCorresponde(
+          productoId,
+          updated[0].sku,
+          updated[0].disponible
+        );
 
         return { data: updated[0] };
       } catch (err) {

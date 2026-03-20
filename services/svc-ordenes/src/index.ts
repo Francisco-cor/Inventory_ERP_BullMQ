@@ -31,6 +31,24 @@ async function bootstrap() {
     await client.end();
   }
 
+  app.setErrorHandler((error, _req, reply) => {
+    if (error.validation) {
+      return reply.status(400).send({
+        error: "ValidationError",
+        message: error.message,
+        statusCode: 400,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    app.log.error(error);
+    return reply.status(500).send({
+      error: "InternalServerError",
+      message: "Error interno del servidor",
+      statusCode: 500,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   await registerSwagger(app);
   await app.register(healthRoutes);
   await app.register(ordenesRoutes, { prefix: "/api/v1/ordenes" });

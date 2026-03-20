@@ -113,9 +113,12 @@ export async function productosRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const parsed = CrearProductoSchema.safeParse(req.body);
       if (!parsed.success) {
+        const message = parsed.error.issues
+          .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+          .join("; ");
         return reply.status(400).send({
           error: "ValidationError",
-          message: parsed.error.message,
+          message,
           statusCode: 400,
           timestamp: new Date().toISOString(),
         });
@@ -158,9 +161,12 @@ export async function productosRoutes(app: FastifyInstance) {
       const parsed = ActualizarProductoSchema.safeParse(req.body);
 
       if (!parsed.success) {
+        const message = parsed.error.issues
+          .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+          .join("; ");
         return reply.status(400).send({
           error: "ValidationError",
-          message: parsed.error.message,
+          message,
           statusCode: 400,
           timestamp: new Date().toISOString(),
         });

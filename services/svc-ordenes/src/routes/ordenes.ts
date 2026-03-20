@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
 import { CrearOrdenSchema } from "../domain/orden.schema.js";
+import {
+  type EstadoOrden,
+  puedeTransicionar,
+  describir,
+} from "../domain/orden.statemachine.js";
 
 export async function ordenesRoutes(app: FastifyInstance) {
   // GET /api/v1/ordenes
@@ -150,9 +155,12 @@ export async function ordenesRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const parsed = CrearOrdenSchema.safeParse(req.body);
       if (!parsed.success) {
+        const message = parsed.error.issues
+          .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+          .join("; ");
         return reply.status(400).send({
           error: "ValidationError",
-          message: parsed.error.message,
+          message,
           statusCode: 400,
           timestamp: new Date().toISOString(),
         });
@@ -233,17 +241,42 @@ export async function ordenesRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string };
       const { motivo } = (req.body as { motivo?: string }) ?? {};
 
+      // Fetch current state to validate transition explicitly
+      const { rows: current } = await pool.query(
+        "SELECT estado FROM ordenes WHERE id = $1",
+        [id]
+      );
+
+      if (current.length === 0) {
+        return reply.status(404).send({
+          error: "NotFound",
+          message: `Orden ${id} no encontrada`,
+          statusCode: 404,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const estadoActual = current[0].estado as EstadoOrden;
+      if (!puedeTransicionar(estadoActual, "cancelada")) {
+        return reply.status(409).send({
+          error: "Conflict",
+          message: `No se puede cancelar la orden. ${describir(estadoActual)}`,
+          statusCode: 409,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       const { rows } = await pool.query(
         `UPDATE ordenes SET estado = 'cancelada', actualizada_en = NOW()
-         WHERE id = $1 AND estado = 'pendiente'
+         WHERE id = $1 AND estado = $2
          RETURNING *`,
-        [id]
+        [id, estadoActual]
       );
 
       if (rows.length === 0) {
         return reply.status(409).send({
           error: "Conflict",
-          message: `Orden ${id} no existe o ya no está en estado pendiente`,
+          message: `Estado de la orden cambió durante el procesamiento. Intente de nuevo.`,
           statusCode: 409,
           timestamp: new Date().toISOString(),
         });

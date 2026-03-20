@@ -3,6 +3,7 @@ import pg from "pg";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { stockRoutes } from "./routes/stock.js";
+import { alertasRoutes } from "./routes/alertas.js";
 import { healthRoutes } from "./routes/health.js";
 import { registerSwagger } from "./routes/swagger.js";
 import { startEventConsumer } from "./events/consumer.js";
@@ -31,9 +32,28 @@ async function bootstrap() {
     await client.end();
   }
 
+  app.setErrorHandler((error, _req, reply) => {
+    if (error.validation) {
+      return reply.status(400).send({
+        error: "ValidationError",
+        message: error.message,
+        statusCode: 400,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    app.log.error(error);
+    return reply.status(500).send({
+      error: "InternalServerError",
+      message: "Error interno del servidor",
+      statusCode: 500,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   await registerSwagger(app);
   await app.register(healthRoutes);
   await app.register(stockRoutes, { prefix: "/api/v1/stock" });
+  await app.register(alertasRoutes, { prefix: "/api/v1/stock/alertas" });
 
   await startEventConsumer();
 
