@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { pool } from "../db/pool.js";
-import { publishEvent } from "../events/publisher.js";
+import { publishEvent, EVENTS } from "../events/publisher.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
@@ -19,6 +19,10 @@ async function registrarAlertaSiCorresponde(
                    tipo         = EXCLUDED.tipo,
                    creada_en    = NOW()`,
     [productoId, sku, disponible, STOCK_UMBRAL, tipo]
+  );
+  await publishEvent(
+    EVENTS.STOCK_ALERTA,
+    { productoId, sku, disponible, umbral: STOCK_UMBRAL, tipo }
   );
 }
 
@@ -174,7 +178,7 @@ export async function stockRoutes(app: FastifyInstance) {
 
         await client.query("COMMIT");
 
-        await publishEvent("stock.ajustado", { productoId, delta, motivo });
+        await publishEvent(EVENTS.STOCK_AJUSTADO, { productoId, delta, motivo });
 
         // Registrar alerta si el stock disponible cae bajo el umbral
         await registrarAlertaSiCorresponde(

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
-import { publishEvent } from "../events/publisher.js";
+import { publishEvent, EVENTS } from "../events/publisher.js";
 import { CrearOrdenSchema } from "../domain/orden.schema.js";
 import {
   type EstadoOrden,
@@ -195,7 +195,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
         await client.query("COMMIT");
 
         await publishEvent(
-          "orden.creada",
+          EVENTS.ORDEN_CREADA,
           {
             orden: {
               id: ordenId,
@@ -240,6 +240,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { id } = req.params as { id: string };
       const { motivo } = (req.body as { motivo?: string }) ?? {};
+      const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
       // Fetch current state to validate transition explicitly
       const { rows: current } = await pool.query(
@@ -282,7 +283,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
         });
       }
 
-      await publishEvent("orden.cancelada", { ordenId: id, motivo });
+      await publishEvent(EVENTS.ORDEN_CANCELADA, { ordenId: id, motivo }, correlationId);
 
       return { data: rows[0] };
     }

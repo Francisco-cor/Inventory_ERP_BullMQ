@@ -119,6 +119,11 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
                        creada_en    = NOW()`,
         [linea.productoId, s[0].sku, s[0].disponible, STOCK_UMBRAL, tipo]
       );
+      await publishEvent(
+        EVENTS.STOCK_ALERTA,
+        { productoId: linea.productoId, sku: s[0].sku, disponible: s[0].disponible, umbral: STOCK_UMBRAL, tipo },
+        event.correlationId
+      );
     }
   }
 
@@ -168,10 +173,11 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
     await client.query("COMMIT");
 
     if (reservas.length > 0) {
-      await publishEvent(EVENTS.STOCK_LIBERADO, {
-        ordenId,
-        items: reservas.map((r) => ({ productoId: r.producto_id, cantidad: r.cantidad })),
-      });
+      await publishEvent(
+        EVENTS.STOCK_LIBERADO,
+        { ordenId, items: reservas.map((r) => ({ productoId: r.producto_id, cantidad: r.cantidad })) },
+        event.correlationId
+      );
     }
 
     console.log(`[consumer:stock] Stock liberado para orden cancelada ${ordenId}`);
