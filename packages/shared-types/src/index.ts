@@ -8,8 +8,10 @@ export type EventName =
   | "orden.confirmada"
   | "orden.cancelada"
   | "stock.reservado"
+  | "stock.insuficiente"
   | "stock.liberado"
-  | "stock.ajustado";
+  | "stock.ajustado"
+  | "stock.alerta";
 
 export interface DomainEvent<T = unknown> {
   id: string;
@@ -97,6 +99,13 @@ export interface StockItem {
 export interface StockReservadoPayload {
   ordenId: string;
   items: Array<{ productoId: string; cantidad: number }>;
+}
+
+export interface StockInsuficientePayload {
+  ordenId: string;
+  sku: string;
+  disponible: number;
+  requerido: number;
 }
 
 export interface StockLiberadoPayload {

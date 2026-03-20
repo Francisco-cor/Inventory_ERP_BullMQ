@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@erp/shared-types": "*",
+    "@erp/event-bus": "*",
     "bullmq": "^5.0.0",
     "fastify": "^5.0.0",
     "@fastify/swagger": "^9.0.0",

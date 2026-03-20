@@ -18,6 +18,15 @@ export async function healthRoutes(app: FastifyInstance) {
               uptime: { type: "number" },
             },
           },
+          503: {
+            type: "object",
+            properties: {
+              status: { type: "string" },
+              service: { type: "string" },
+              db: { type: "string" },
+              uptime: { type: "number" },
+            },
+          },
         },
       },
     },

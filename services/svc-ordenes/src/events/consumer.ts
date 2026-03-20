@@ -1,64 +1,91 @@
-import { Worker } from "bullmq";
-import type { DomainEvent } from "@erp/shared-types";
+import { EVENTS } from "@erp/event-bus";
+import type {
+  DomainEvent,
+  StockReservadoPayload,
+  StockInsuficientePayload,
+} from "@erp/shared-types";
 import { pool } from "../db/pool.js";
+import { publishEvent } from "./publisher.js";
+import { eventBus } from "./bus.js";
 
-const connection = {
-  host: process.env.REDIS_HOST ?? "localhost",
-  port: Number(process.env.REDIS_PORT ?? 6379),
-};
+async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      "SELECT event_id FROM eventos_recibidos WHERE event_id = $1",
+      [eventId]
+    );
+    if (rows.length > 0) return true;
+    await client.query(
+      "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2)",
+      [eventId, eventName]
+    );
+    return false;
+  } finally {
+    client.release();
+  }
+}
 
-// svc-ordenes reacts to stock events (e.g. stock.reservado → confirmar orden)
-export function startEventConsumer(): void {
-  const worker = new Worker<DomainEvent>(
-    "domain-events",
-    async (job) => {
-      const event = job.data;
+// stock.reservado → confirmar orden + emitir orden.confirmada
+async function onStockReservado(event: DomainEvent<StockReservadoPayload>): Promise<void> {
+  if (await isAlreadyProcessed(event.id, event.name)) {
+    console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
+    return;
+  }
 
-      // Idempotency check
-      const client = await pool.connect();
-      try {
-        const { rows } = await client.query(
-          "SELECT event_id FROM eventos_recibidos WHERE event_id = $1",
-          [event.id]
-        );
-        if (rows.length > 0) {
-          console.log(`[consumer] Skipping duplicate event ${event.id}`);
-          return;
-        }
+  const { ordenId } = event.payload;
+  const client = await pool.connect();
+  try {
+    const { rowCount } = await client.query(
+      `UPDATE ordenes SET estado = 'confirmada', actualizada_en = NOW()
+       WHERE id = $1 AND estado = 'pendiente'`,
+      [ordenId]
+    );
 
-        await client.query(
-          "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2)",
-          [event.id, event.name]
-        );
-
-        switch (event.name) {
-          case "stock.reservado": {
-            const payload = event.payload as { ordenId: string };
-            await client.query(
-              `UPDATE ordenes SET estado = 'confirmada', actualizada_en = NOW()
-               WHERE id = $1 AND estado = 'pendiente'`,
-              [payload.ordenId]
-            );
-            console.log(`[consumer] Orden ${payload.ordenId} confirmada tras reserva de stock`);
-            break;
-          }
-          default:
-            // Events from other services not handled here — ignore safely
-            break;
-        }
-      } finally {
-        client.release();
-      }
-    },
-    {
-      connection,
-      concurrency: 5,
+    if ((rowCount ?? 0) > 0) {
+      await publishEvent(
+        EVENTS.ORDEN_CONFIRMADA,
+        { ordenId, confirmadaEn: new Date().toISOString() },
+        event.correlationId
+      );
+      console.log(`[consumer:ordenes] Orden ${ordenId} confirmada`);
     }
-  );
+  } finally {
+    client.release();
+  }
+}
 
-  worker.on("failed", (job, err) => {
-    console.error(`[consumer] Job ${job?.id} failed:`, err);
-  });
+// stock.insuficiente → cancelar orden
+async function onStockInsuficiente(event: DomainEvent<StockInsuficientePayload>): Promise<void> {
+  if (await isAlreadyProcessed(event.id, event.name)) {
+    console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
+    return;
+  }
 
-  console.log("[consumer] svc-ordenes event consumer started");
+  const { ordenId, sku } = event.payload;
+  const client = await pool.connect();
+  try {
+    const { rowCount } = await client.query(
+      `UPDATE ordenes SET estado = 'cancelada', actualizada_en = NOW()
+       WHERE id = $1 AND estado = 'pendiente'`,
+      [ordenId]
+    );
+
+    if ((rowCount ?? 0) > 0) {
+      await publishEvent(
+        EVENTS.ORDEN_CANCELADA,
+        { ordenId, motivo: `Stock insuficiente para SKU ${sku}` },
+        event.correlationId
+      );
+      console.log(`[consumer:ordenes] Orden ${ordenId} cancelada — stock insuficiente (${sku})`);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+export function startEventConsumer(): void {
+  eventBus.subscribe(EVENTS.STOCK_RESERVADO, onStockReservado);
+  eventBus.subscribe(EVENTS.STOCK_INSUFICIENTE, onStockInsuficiente);
+  eventBus.startWorker();
 }

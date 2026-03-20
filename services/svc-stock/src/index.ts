@@ -5,8 +5,10 @@ import { runMigrations } from "./db/migrate.js";
 import { stockRoutes } from "./routes/stock.js";
 import { alertasRoutes } from "./routes/alertas.js";
 import { healthRoutes } from "./routes/health.js";
+import { adminRoutes } from "./routes/admin.js";
 import { registerSwagger } from "./routes/swagger.js";
 import { startEventConsumer } from "./events/consumer.js";
+import { eventBus } from "./events/bus.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -32,16 +34,17 @@ async function bootstrap() {
     await client.end();
   }
 
-  app.setErrorHandler((error, _req, reply) => {
-    if (error.validation) {
+  app.setErrorHandler((err, _req, reply) => {
+    const e = err as { validation?: unknown; message?: string };
+    if (e.validation) {
       return reply.status(400).send({
         error: "ValidationError",
-        message: error.message,
+        message: e.message ?? "Validation error",
         statusCode: 400,
         timestamp: new Date().toISOString(),
       });
     }
-    app.log.error(error);
+    app.log.error(err);
     return reply.status(500).send({
       error: "InternalServerError",
       message: "Error interno del servidor",
@@ -54,6 +57,7 @@ async function bootstrap() {
   await app.register(healthRoutes);
   await app.register(stockRoutes, { prefix: "/api/v1/stock" });
   await app.register(alertasRoutes, { prefix: "/api/v1/stock/alertas" });
+  await app.register(adminRoutes, { prefix: "/admin" });
 
   await startEventConsumer();
 
@@ -69,6 +73,7 @@ bootstrap().catch((err) => {
 
 process.on("SIGTERM", async () => {
   await app.close();
+  await eventBus.close();
   await pool.end();
   process.exit(0);
 });

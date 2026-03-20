@@ -4,11 +4,13 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "paths": {
-      "@erp/shared-types": ["../../packages/shared-types/src/index.ts"]
+      "@erp/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@erp/event-bus": ["../../packages/event-bus/src/index.ts"]
     }
   },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/shared-types" }
+    { "path": "../../packages/shared-types" },
+    { "path": "../../packages/event-bus" }
   ]
 }
