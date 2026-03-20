@@ -1,0 +1,26 @@
+{
+  "name": "@erp/svc-obs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@erp/shared-types": "*",
+    "@erp/event-bus": "*",
+    "bullmq": "^5.0.0",
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^10.0.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

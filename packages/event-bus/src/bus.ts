@@ -24,7 +24,7 @@ export interface FailedJob {
 }
 
 // All service queues — publish fans out to each one.
-const ALL_SERVICES: ServiceName[] = ["svc-ordenes", "svc-stock", "svc-productos"];
+const ALL_SERVICES: ServiceName[] = ["svc-ordenes", "svc-stock", "svc-productos", "svc-obs"];
 
 function queueName(service: ServiceName): string {
   return `events:${service}`;

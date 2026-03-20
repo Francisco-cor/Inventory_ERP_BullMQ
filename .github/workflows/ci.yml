@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: E2E Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and start services
+        run: docker compose up --build -d
+
+      - name: Wait for nginx to be healthy
+        run: |
+          echo "Waiting for services to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost/health/productos > /dev/null 2>&1; then
+              echo "Services ready after ${i}x5s"
+              break
+            fi
+            echo "Attempt $i/30..."
+            sleep 5
+          done
+          curl -f http://localhost/health/productos
+          curl -f http://localhost/health/ordenes
+          curl -f http://localhost/health/stock
+          curl -f http://localhost/health/obs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install E2E test dependencies
+        working-directory: tests/e2e
+        run: npm install
+
+      - name: Run E2E tests
+        working-directory: tests/e2e
+        env:
+          ERP_BASE_URL: http://localhost:80
+        run: npm test
+
+      - name: Print service logs on failure
+        if: failure()
+        run: docker compose logs --tail=100

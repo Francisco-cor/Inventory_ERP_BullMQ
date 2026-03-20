@@ -10,6 +10,7 @@ volumes:
   pg-productos-data:
   pg-ordenes-data:
   pg-stock-data:
+  pg-obs-data:
   redis-data:
 
 services:
@@ -184,6 +185,73 @@ services:
       retries: 5
       start_period: 20s
 
+  # ── postgres-obs ────────────────────────────────────────────────────────────
+  postgres-obs:
+    image: postgres:16-alpine
+    container_name: postgres-obs
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       obs_db
+      POSTGRES_USER:     obs_user
+      POSTGRES_PASSWORD: obs_pass
+    volumes:
+      - pg-obs-data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    networks:
+      - erp-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U obs_user -d obs_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── svc-obs ─────────────────────────────────────────────────────────────────
+  svc-obs:
+    build:
+      context: .
+      dockerfile: services/svc-obs/Dockerfile
+    container_name: svc-obs
+    restart: unless-stopped
+    environment:
+      NODE_ENV:               production
+      PORT:                   3004
+      DATABASE_URL:           postgres://obs_user:obs_pass@postgres-obs:5432/obs_db
+      REDIS_HOST:             redis
+      REDIS_PORT:             6379
+      LOG_LEVEL:              info
+      SLA_THRESHOLD_SECONDS:  60
+      SLA_CHECK_INTERVAL_MS:  30000
+    depends_on:
+      postgres-obs:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - erp-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3004/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── dashboard ────────────────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - erp-internal
+
   # ── nginx (reverse proxy) ───────────────────────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -199,6 +267,8 @@ services:
       svc-ordenes:
         condition: service_healthy
       svc-stock:
+        condition: service_healthy
+      svc-obs:
         condition: service_healthy
     networks:
       - erp-internal

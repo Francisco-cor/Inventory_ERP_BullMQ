@@ -22,7 +22,7 @@ export interface DomainEvent<T = unknown> {
   correlationId: string;
 }
 
-export type ServiceName = "svc-productos" | "svc-ordenes" | "svc-stock";
+export type ServiceName = "svc-productos" | "svc-ordenes" | "svc-stock" | "svc-obs";
 
 // ─── Producto ─────────────────────────────────────────────────────────────────
 
