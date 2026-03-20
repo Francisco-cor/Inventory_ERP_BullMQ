@@ -17,8 +17,9 @@ async function isAlreadyProcessed(eventId: string, eventName: string): Promise<b
   return (rowCount ?? 0) === 0;
 }
 
-async function storeAndBroadcast(event: DomainEvent): Promise<void> {
-  if (await isAlreadyProcessed(event.id, event.name)) return;
+// Returns true if the event was new and processed, false if it was a duplicate.
+async function storeAndBroadcast(event: DomainEvent): Promise<boolean> {
+  if (await isAlreadyProcessed(event.id, event.name)) return false;
 
   const client = await pool.connect();
   try {
@@ -48,10 +49,12 @@ async function storeAndBroadcast(event: DomainEvent): Promise<void> {
     timestamp: event.timestamp,
     payload: event.payload,
   });
+
+  return true;
 }
 
 async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<void> {
-  await storeAndBroadcast(event);
+  if (!(await storeAndBroadcast(event))) return;
 
   const client = await pool.connect();
   try {
@@ -67,7 +70,7 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
 }
 
 async function onOrdenConfirmada(event: DomainEvent<OrdenConfirmadaPayload>): Promise<void> {
-  await storeAndBroadcast(event);
+  if (!(await storeAndBroadcast(event))) return;
 
   const client = await pool.connect();
   try {
@@ -83,7 +86,7 @@ async function onOrdenConfirmada(event: DomainEvent<OrdenConfirmadaPayload>): Pr
 }
 
 async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Promise<void> {
-  await storeAndBroadcast(event);
+  if (!(await storeAndBroadcast(event))) return;
 
   const client = await pool.connect();
   try {
