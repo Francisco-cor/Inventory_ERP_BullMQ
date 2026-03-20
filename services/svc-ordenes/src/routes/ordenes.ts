@@ -48,7 +48,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
                   'cantidad', l.cantidad,
                   'precioUnitario', l.precio_unitario,
                   'subtotal', l.subtotal
-                )) AS lineas
+                )) FILTER (WHERE l.orden_id IS NOT NULL) AS lineas
          FROM ordenes o
          LEFT JOIN lineas_orden l ON l.orden_id = o.id
          ${whereClause}
@@ -102,7 +102,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
                   'cantidad', l.cantidad,
                   'precioUnitario', l.precio_unitario,
                   'subtotal', l.subtotal
-                )) AS lineas
+                )) FILTER (WHERE l.orden_id IS NOT NULL) AS lineas
          FROM ordenes o
          LEFT JOIN lineas_orden l ON l.orden_id = o.id
          WHERE o.id = $1
@@ -167,10 +167,9 @@ export async function ordenesRoutes(app: FastifyInstance) {
       }
 
       const { lineas } = parsed.data;
-      const total = lineas.reduce(
-        (sum, l) => sum + l.cantidad * l.precioUnitario,
-        0
-      );
+      const total = Math.round(
+        lineas.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0) * 100
+      ) / 100;
       const ordenId = randomUUID();
       const correlationId = randomUUID();
 

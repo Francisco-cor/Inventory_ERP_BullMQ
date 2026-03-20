@@ -34,8 +34,8 @@ export async function obsRoutes(app: FastifyInstance): Promise<void> {
           })}\n\n`
         );
       }
-    } catch {
-      // Non-fatal — client will receive live events
+    } catch (err) {
+      req.log.warn({ err }, "[obs:sse] Failed to load initial event history");
     }
 
     // Keep-alive ping every 15s
