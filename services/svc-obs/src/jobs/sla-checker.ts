@@ -1,4 +1,5 @@
 import { Queue, Worker } from "bullmq";
+import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { broadcast } from "../sse/broker.js";
 
@@ -51,7 +52,7 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
           [orderIds]
         );
 
-        // Broadcast SLA warnings to SSE clients
+        // Broadcast SLA warnings and persist each one to the event log
         for (const row of rows) {
           const alert = {
             ordenId: row.orden_id,
@@ -60,6 +61,13 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
           };
           console.log(`[sla-checker] SLA_WARNING: orden ${row.orden_id} (${row.segundos}s)`);
           broadcast("sla_warning", alert);
+
+          await client.query(
+            `INSERT INTO event_log (event_id, event_name, source, correlation_id, payload, emitido_en)
+             VALUES ($1, 'sla.warning', 'svc-obs', $2, $3, NOW())
+             ON CONFLICT (event_id) DO NOTHING`,
+            [randomUUID(), row.orden_id, JSON.stringify(alert)]
+          );
         }
       } finally {
         client.release();

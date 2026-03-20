@@ -11,7 +11,8 @@ export type EventName =
   | "stock.insuficiente"
   | "stock.liberado"
   | "stock.ajustado"
-  | "stock.alerta";
+  | "stock.alerta"
+  | "sla.warning";
 
 export interface DomainEvent<T = unknown> {
   id: string;
@@ -134,6 +135,12 @@ export interface EventLogEntry {
 }
 
 export interface AlertaOrdenPendiente {
+  ordenId: string;
+  creadaEn: string;
+  segundosPendiente: number;
+}
+
+export interface SlaWarningPayload {
   ordenId: string;
   creadaEn: string;
   segundosPendiente: number;
