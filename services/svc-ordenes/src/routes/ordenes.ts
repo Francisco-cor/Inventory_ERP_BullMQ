@@ -171,7 +171,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
         lineas.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0) * 100
       ) / 100;
       const ordenId = randomUUID();
-      const correlationId = randomUUID();
+      const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
       const client = await pool.connect();
       try {
