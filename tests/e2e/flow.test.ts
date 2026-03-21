@@ -8,11 +8,12 @@
  *   1. Create a product (svc-productos)
  *   2. Initialize stock for that product (svc-stock)
  *   3. Create an order (svc-ordenes) → triggers event chain
- *   4. Poll until order is CONFIRMED (svc-ordenes confirms when stock is reserved)
+ *   4. Wait for orden.confirmada on the SSE stream (svc-obs)
  *   5. Verify stock decreased (svc-stock)
  *   6. Verify svc-obs recorded the events
  */
 
+import http from "node:http";
 import supertest from "supertest";
 
 const BASE = process.env.ERP_BASE_URL ?? "http://localhost:80";
@@ -22,7 +23,7 @@ const api  = supertest(BASE);
 
 async function poll<T>(
   fn: () => Promise<T | null>,
-  { maxMs = 15_000, intervalMs = 500 } = {}
+  { maxMs = 30_000, intervalMs = 500 } = {}
 ): Promise<T> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
@@ -32,6 +33,74 @@ async function poll<T>(
   }
   throw new Error(`poll() timed out after ${maxMs}ms`);
 }
+
+/**
+ * Connect to the SSE stream and resolve once an event matching `predicate`
+ * arrives. Uses raw Node http.get so no EventSource polyfill is needed.
+ * The SSE broker sends: event: <type>\ndata: <json>\n\n
+ */
+function waitForSseEvent(
+  url: string,
+  predicate: (eventName: string, data: unknown) => boolean,
+  timeoutMs = 30_000
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (!settled) { settled = true; fn(); }
+    };
+
+    const timer = setTimeout(
+      () => settle(() => { req.destroy(); reject(new Error(`waitForSseEvent timed out after ${timeoutMs}ms`)); }),
+      timeoutMs
+    );
+
+    const req = http.get(url, { headers: { Accept: "text/event-stream" } }, (res) => {
+      let buf = "";
+      let currentEvent = "message";
+      let currentData = "";
+
+      res.on("data", (chunk: Buffer) => {
+        buf += chunk.toString();
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            currentData = line.slice(5).trim();
+          } else if (line === "" && currentData) {
+            try {
+              const parsed = JSON.parse(currentData);
+              if (predicate(currentEvent, parsed)) {
+                settle(() => { clearTimeout(timer); req.destroy(); resolve(parsed); });
+              }
+            } catch { /* ignore malformed frames */ }
+            currentEvent = "message";
+            currentData = "";
+          }
+        }
+      });
+
+      res.on("error", (err) => settle(() => { clearTimeout(timer); reject(err); }));
+    });
+
+    req.on("error", (err) => settle(() => { clearTimeout(timer); reject(err); }));
+  });
+}
+
+/** Predicate factory: matches a domain event on the SSE "event" channel by eventName + payload field. */
+function sseEventWith(eventName: string, payloadKey: string, payloadValue: string) {
+  return (name: string, data: unknown): boolean => {
+    if (name !== "event" || typeof data !== "object" || data === null) return false;
+    const d = data as Record<string, unknown>;
+    if (d["eventName"] !== eventName) return false;
+    const payload = d["payload"] as Record<string, unknown> | undefined;
+    return payload?.[payloadKey] === payloadValue;
+  };
+}
+
+const SSE_URL = `${BASE}/api/v1/obs/events/stream`;
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -101,18 +170,19 @@ describe("ERP — full order flow", () => {
     ordenId = res.body.data.id;
   });
 
-  // ── Step 4: Order confirmed ────────────────────────────────────────────────
-  test("4. GET /api/v1/ordenes/:id — order transitions to CONFIRMADA", async () => {
-    const orden = await poll(async () => {
-      const res = await api
-        .get(`/api/v1/ordenes/${ordenId}`)
-        .expect(200);
+  // ── Step 4: Order confirmed via SSE ────────────────────────────────────────
+  // Subscribes to the svc-obs SSE stream and waits for the orden.confirmada
+  // domain event instead of busy-polling the REST endpoint.
+  test("4. SSE stream — orden.confirmada received for this order", async () => {
+    await waitForSseEvent(
+      SSE_URL,
+      sseEventWith("orden.confirmada", "ordenId", ordenId),
+      30_000
+    );
 
-      if (res.body.data.estado === "confirmada") return res.body.data;
-      return null;
-    });
-
-    expect(orden.estado).toBe("confirmada");
+    // Confirm the REST state is also updated
+    const res = await api.get(`/api/v1/ordenes/${ordenId}`).expect(200);
+    expect(res.body.data.estado).toBe("confirmada");
   });
 
   // ── Step 5: Stock decreased ────────────────────────────────────────────────
@@ -170,13 +240,16 @@ describe("ERP — insufficient stock flow", () => {
     ordenId = res.body.data.id;
   });
 
-  test("3. Order transitions to CANCELADA", async () => {
-    const orden = await poll(async () => {
-      const res = await api.get(`/api/v1/ordenes/${ordenId}`).expect(200);
-      if (res.body.data.estado === "cancelada") return res.body.data;
-      return null;
-    });
-    expect(orden.estado).toBe("cancelada");
+  // Wait for orden.cancelada on the SSE stream instead of polling REST.
+  test("3. SSE stream — orden.cancelada received for this order", async () => {
+    await waitForSseEvent(
+      SSE_URL,
+      sseEventWith("orden.cancelada", "ordenId", ordenId),
+      30_000
+    );
+
+    const res = await api.get(`/api/v1/ordenes/${ordenId}`).expect(200);
+    expect(res.body.data.estado).toBe("cancelada");
   });
 
   test("4. svc-obs recorded stock.insuficiente", async () => {

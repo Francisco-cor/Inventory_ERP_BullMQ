@@ -30,25 +30,53 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
   const autoScroll = useRef(true);
 
   useEffect(() => {
-    const es = new EventSource(sseUrl);
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+    let active = true; // set to false on cleanup to cancel pending reconnects
 
-    es.addEventListener("event", (e) => {
-      const entry: EventEntry = JSON.parse(e.data);
-      setEvents((prev) => {
-        const next = [...prev, entry];
-        return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
+    function connect() {
+      if (!active) return;
+      es = new EventSource(sseUrl);
+
+      es.addEventListener("event", (e: MessageEvent) => {
+        attempt = 0; // reset backoff on successful message
+        const entry: EventEntry = JSON.parse(e.data);
+        setEvents((prev) => {
+          const next = [...prev, entry];
+          return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
+        });
+        setConnected(true);
       });
-      setConnected(true);
-    });
 
-    es.addEventListener("sla_warning", (e) => {
-      onSlaWarning(JSON.parse(e.data));
-    });
+      es.addEventListener("sla_warning", (e: MessageEvent) => {
+        onSlaWarning(JSON.parse(e.data));
+      });
 
-    es.onerror = () => setConnected(false);
-    es.onopen  = () => setConnected(true);
+      es.onopen = () => {
+        attempt = 0;
+        setConnected(true);
+      };
 
-    return () => es.close();
+      es.onerror = () => {
+        setConnected(false);
+        es?.close();
+        es = null;
+        if (!active) return;
+        // Exponential backoff: 1 s → 2 s → 4 s → … capped at 30 s
+        const delay = Math.min(1_000 * 2 ** attempt, 30_000);
+        attempt += 1;
+        reconnectTimer = setTimeout(connect, delay);
+      };
+    }
+
+    connect();
+
+    return () => {
+      active = false;
+      reconnectTimer && clearTimeout(reconnectTimer);
+      es?.close();
+    };
   }, [sseUrl, onSlaWarning]);
 
   useEffect(() => {
