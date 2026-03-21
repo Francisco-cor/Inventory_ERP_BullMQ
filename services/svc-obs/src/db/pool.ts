@@ -2,7 +2,7 @@ import pg from "pg";
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 10,
+  max: Number(process.env.DB_POOL_MAX ?? 10),
 });
 
 export async function waitForDatabase(retries = 20, delayMs = 2000): Promise<void> {

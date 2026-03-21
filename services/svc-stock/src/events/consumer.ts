@@ -4,14 +4,22 @@ import type {
   OrdenCreadaPayload,
   OrdenCanceladaPayload,
 } from "@erp/shared-types";
+import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
 import { eventBus } from "./bus.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
-async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
-  const { rowCount } = await pool.query(
+// Inserts the event id inside an active transaction so that a rollback also
+// reverts the idempotency record, preventing events from being silently
+// skipped when the surrounding transaction failed and the job is retried.
+async function isAlreadyProcessed(
+  client: PoolClient,
+  eventId: string,
+  eventName: string
+): Promise<boolean> {
+  const { rowCount } = await client.query(
     "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2) ON CONFLICT (event_id) DO NOTHING",
     [eventId, eventName]
   );
@@ -20,16 +28,23 @@ async function isAlreadyProcessed(eventId: string, eventName: string): Promise<b
 
 // orden.creada → intentar reservar stock
 async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<void> {
-  if (await isAlreadyProcessed(event.id, event.name)) {
-    console.log(`[consumer:stock] Skipping duplicate ${event.id}`);
-    return;
-  }
-
   const { orden } = event.payload;
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+
+    // Idempotency check runs inside the transaction so a later ROLLBACK also
+    // rolls back this record, letting the job be safely retried on failure.
+    if (await isAlreadyProcessed(client, event.id, event.name)) {
+      await client.query("COMMIT");
+      console.log(`[consumer:stock] Skipping duplicate ${event.id}`);
+      return;
+    }
+
+    // SAVEPOINT before touching stock rows so we can undo reservation changes
+    // on insufficient-stock but still COMMIT the idempotency record.
+    await client.query("SAVEPOINT pre_reservation");
 
     for (const linea of orden.lineas) {
       // Upsert stock row if product not yet known
@@ -46,7 +61,10 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
       );
 
       if (rows.length === 0 || rows[0].disponible < linea.cantidad) {
-        await client.query("ROLLBACK");
+        // Roll back only the stock changes; keep the idempotency record.
+        await client.query("ROLLBACK TO SAVEPOINT pre_reservation");
+        await client.query("RELEASE SAVEPOINT pre_reservation");
+        await client.query("COMMIT");
         console.warn(`[consumer:stock] Stock insuficiente para ${linea.sku} (orden ${orden.id})`);
 
         await publishEvent(
@@ -83,6 +101,7 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
       );
     }
 
+    await client.query("RELEASE SAVEPOINT pre_reservation");
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -132,16 +151,17 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
 
 // orden.cancelada → liberar reservas
 async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Promise<void> {
-  if (await isAlreadyProcessed(event.id, event.name)) {
-    console.log(`[consumer:stock] Skipping duplicate ${event.id}`);
-    return;
-  }
-
   const { ordenId } = event.payload;
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+
+    if (await isAlreadyProcessed(client, event.id, event.name)) {
+      await client.query("COMMIT");
+      console.log(`[consumer:stock] Skipping duplicate ${event.id}`);
+      return;
+    }
 
     const { rows: reservas } = await client.query(
       "SELECT producto_id, cantidad FROM reservas WHERE orden_id = $1 AND estado = 'activa'",
@@ -193,16 +213,32 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
 async function onProductoCreado(
   event: DomainEvent<{ producto: { id: string; sku: string } }>
 ): Promise<void> {
-  if (await isAlreadyProcessed(event.id, event.name)) return;
-
   const { producto } = event.payload;
-  await pool.query(
-    `INSERT INTO stock (producto_id, sku, disponible, reservado)
-     VALUES ($1, $2, 0, 0)
-     ON CONFLICT (producto_id) DO NOTHING`,
-    [producto.id, producto.sku]
-  );
-  console.log(`[consumer:stock] Stock inicializado para producto ${producto.sku}`);
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    if (await isAlreadyProcessed(client, event.id, event.name)) {
+      await client.query("COMMIT");
+      return;
+    }
+
+    await client.query(
+      `INSERT INTO stock (producto_id, sku, disponible, reservado)
+       VALUES ($1, $2, 0, 0)
+       ON CONFLICT (producto_id) DO NOTHING`,
+      [producto.id, producto.sku]
+    );
+
+    await client.query("COMMIT");
+    console.log(`[consumer:stock] Stock inicializado para producto ${producto.sku}`);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export function startEventConsumer(): void {
