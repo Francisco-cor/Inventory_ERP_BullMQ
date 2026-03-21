@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { pool } from "../db/pool.js";
 import { publishEvent, EVENTS } from "../events/publisher.js";
+import { requireApiKey } from "../plugins/auth.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
@@ -111,6 +112,7 @@ export async function stockRoutes(app: FastifyInstance) {
   app.post(
     "/:productoId/ajustar",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["stock"],
         summary: "Ajustar manualmente el stock disponible de un producto",

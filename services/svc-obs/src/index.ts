@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
@@ -37,6 +38,18 @@ async function bootstrap(): Promise<void> {
   }
 
   await app.register(cors, { origin: true });
+
+  await app.register(rateLimit, {
+    global: true,
+    max: 200,
+    timeWindow: "1 minute",
+    errorResponseBuilder: (_req, context) => ({
+      error: "TooManyRequests",
+      message: `Demasiadas peticiones. Máximo ${context.max} por minuto.`,
+      statusCode: 429,
+      timestamp: new Date().toISOString(),
+    }),
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     app.log.error(err);

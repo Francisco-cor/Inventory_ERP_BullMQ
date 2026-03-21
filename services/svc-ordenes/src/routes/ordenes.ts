@@ -8,6 +8,7 @@ import {
   puedeTransicionar,
   describir,
 } from "../domain/orden.statemachine.js";
+import { requireApiKey } from "../plugins/auth.js";
 
 export async function ordenesRoutes(app: FastifyInstance) {
   // GET /api/v1/ordenes
@@ -127,6 +128,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
   app.post(
     "/",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["ordenes"],
         summary: "Crear una nueva orden",
@@ -222,6 +224,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
   app.post(
     "/:id/cancelar",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["ordenes"],
         summary: "Cancelar una orden pendiente",

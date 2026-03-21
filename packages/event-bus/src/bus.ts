@@ -121,12 +121,17 @@ export function createEventBus(config: EventBusConfig) {
     await job.retry("failed");
   }
 
+  async function ping(): Promise<void> {
+    const client = await myQueue.client;
+    await client.ping();
+  }
+
   async function close(): Promise<void> {
     await worker?.close();
     await Promise.all([...publishQueues.values()].map((q) => q.close()));
   }
 
-  return { publish, subscribe, startWorker, getFailedJobs, retryJob, close };
+  return { publish, subscribe, startWorker, getFailedJobs, retryJob, ping, close };
 }
 
 export type EventBus = ReturnType<typeof createEventBus>;

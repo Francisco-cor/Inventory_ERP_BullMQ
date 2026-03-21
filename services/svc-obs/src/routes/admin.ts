@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { eventBus } from "../events/bus.js";
+import { requireApiKey } from "../plugins/auth.js";
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get(
     "/dlq",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["admin"],
         summary: "Listar eventos en la Dead Letter Queue",
@@ -26,6 +28,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post(
     "/dlq/:jobId/retry",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["admin"],
         summary: "Reintentar un job fallido de la Dead Letter Queue",

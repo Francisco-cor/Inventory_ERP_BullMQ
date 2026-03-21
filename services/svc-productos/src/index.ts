@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
@@ -33,7 +34,20 @@ async function bootstrap() {
     await client.end();
   }
 
-  // 2. Centralized error handler
+  // 2. Rate limiting
+  await app.register(rateLimit, {
+    global: true,
+    max: 200,
+    timeWindow: "1 minute",
+    errorResponseBuilder: (_req, context) => ({
+      error: "TooManyRequests",
+      message: `Demasiadas peticiones. Máximo ${context.max} por minuto.`,
+      statusCode: 429,
+      timestamp: new Date().toISOString(),
+    }),
+  });
+
+  // 3. Centralized error handler
   app.setErrorHandler((err, _req, reply) => {
     const e = err as { validation?: unknown; message?: string };
     if (e.validation) {
@@ -53,15 +67,15 @@ async function bootstrap() {
     });
   });
 
-  // 3. Register OpenAPI / Swagger
+  // 4. Register OpenAPI / Swagger
   await registerSwagger(app);
 
-  // 4. Register routes
+  // 5. Register routes
   await app.register(healthRoutes);
   await app.register(productosRoutes, { prefix: "/api/v1/productos" });
   await app.register(adminRoutes, { prefix: "/admin" });
 
-  // 4. Start server
+  // 6. Start server
   await app.listen({ port: PORT, host: HOST });
   app.log.info(`svc-productos listening on http://${HOST}:${PORT}`);
   app.log.info(`Swagger UI: http://${HOST}:${PORT}/docs`);

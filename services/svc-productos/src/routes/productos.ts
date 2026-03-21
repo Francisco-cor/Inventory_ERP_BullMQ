@@ -6,6 +6,7 @@ import {
   CrearProductoSchema,
   ActualizarProductoSchema,
 } from "../domain/producto.schema.js";
+import { requireApiKey } from "../plugins/auth.js";
 
 export async function productosRoutes(app: FastifyInstance) {
   // GET /api/v1/productos
@@ -94,6 +95,7 @@ export async function productosRoutes(app: FastifyInstance) {
   app.post(
     "/",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["productos"],
         summary: "Crear un nuevo producto",
@@ -146,6 +148,7 @@ export async function productosRoutes(app: FastifyInstance) {
   app.patch(
     "/:id",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["productos"],
         summary: "Actualizar un producto",
@@ -222,6 +225,7 @@ export async function productosRoutes(app: FastifyInstance) {
   app.delete(
     "/:id",
     {
+      preHandler: [requireApiKey],
       schema: {
         tags: ["productos"],
         summary: "Desactivar (soft delete) un producto",

@@ -18,6 +18,7 @@
     "@erp/event-bus": "*",
     "bullmq": "^5.0.0",
     "fastify": "^5.0.0",
+    "@fastify/rate-limit": "^9.1.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
     "pg": "^8.13.0",

@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
@@ -32,6 +33,18 @@ async function bootstrap() {
   } finally {
     await client.end();
   }
+
+  await app.register(rateLimit, {
+    global: true,
+    max: 200,
+    timeWindow: "1 minute",
+    errorResponseBuilder: (_req, context) => ({
+      error: "TooManyRequests",
+      message: `Demasiadas peticiones. Máximo ${context.max} por minuto.`,
+      statusCode: 429,
+      timestamp: new Date().toISOString(),
+    }),
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     const e = err as { validation?: unknown; message?: string };
