@@ -26,6 +26,21 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   );
 
+  app.get(
+    "/dlq/stats",
+    {
+      preHandler: [requireApiKey],
+      schema: {
+        tags: ["admin"],
+        summary: "Estadísticas de la Dead Letter Queue agrupadas por tipo de error",
+      },
+    },
+    async () => {
+      const stats = await eventBus.getFailedJobStats();
+      return { data: stats };
+    }
+  );
+
   app.post(
     "/dlq/:jobId/retry",
     {

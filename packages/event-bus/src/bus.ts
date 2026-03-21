@@ -14,6 +14,24 @@ export interface EventBusConfig {
 
 export type EventHandler<T = unknown> = (event: DomainEvent<T>) => Promise<void>;
 
+export const CURRENT_SCHEMA_VERSION = "1.0";
+
+const TRANSIENT_KEYWORDS = [
+  "econnrefused", "etimedout", "econnreset", "connect", "timeout",
+  "unavailable", "redis", "network",
+] as const;
+
+function extractErrorType(reason: string): string {
+  const colonIdx = reason.indexOf(":");
+  if (colonIdx > 0 && colonIdx < 40) return reason.slice(0, colonIdx).trim();
+  return reason.slice(0, 50).trim();
+}
+
+function classifyError(reason: string): "transient" | "permanent" {
+  const lower = reason.toLowerCase();
+  return TRANSIENT_KEYWORDS.some((k) => lower.includes(k)) ? "transient" : "permanent";
+}
+
 export interface FailedJob {
   id: string;
   eventName: string;
@@ -21,6 +39,19 @@ export interface FailedJob {
   attemptsMade: number;
   timestamp: number;
   correlationId?: string;
+}
+
+export interface DlqErrorStat {
+  errorType: string;
+  count: number;
+  classification: "transient" | "permanent";
+}
+
+export interface DlqStats {
+  total: number;
+  transient: number;
+  permanent: number;
+  byErrorType: DlqErrorStat[];
 }
 
 // All service queues — publish fans out to each one.
@@ -64,6 +95,12 @@ export function createEventBus(config: EventBusConfig) {
       queueName(serviceName),
       async (job) => {
         const event = job.data;
+        if (event.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+          console.warn(
+            `[event-bus:${serviceName}] Unknown schemaVersion "${event.schemaVersion}" on event ${event.id} (${event.name}) — skipping handlers`
+          );
+          return;
+        }
         const eventHandlers = handlers.get(event.name) ?? [];
         for (const h of eventHandlers) {
           await h(event);
@@ -93,6 +130,7 @@ export function createEventBus(config: EventBusConfig) {
       timestamp: new Date().toISOString(),
       source: serviceName,
       correlationId: correlationId ?? randomUUID(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
     };
 
     // Fan-out: deliver to every service queue concurrently
@@ -115,6 +153,30 @@ export function createEventBus(config: EventBusConfig) {
     }));
   }
 
+  async function getFailedJobStats(): Promise<DlqStats> {
+    // Fetch up to 1 000 failed jobs to build stats (avoids loading unbounded data)
+    const jobs = await myQueue.getFailed(0, 999);
+    const counts = new Map<string, { count: number; classification: "transient" | "permanent" }>();
+    for (const job of jobs) {
+      const reason = job.failedReason ?? "unknown";
+      const errorType = extractErrorType(reason);
+      const classification = classifyError(reason);
+      const existing = counts.get(errorType);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(errorType, { count: 1, classification });
+      }
+    }
+    const byErrorType: DlqErrorStat[] = [...counts.entries()]
+      .map(([errorType, { count, classification }]) => ({ errorType, count, classification }))
+      .sort((a, b) => b.count - a.count);
+    const transient = byErrorType
+      .filter((e) => e.classification === "transient")
+      .reduce((sum, e) => sum + e.count, 0);
+    return { total: jobs.length, transient, permanent: jobs.length - transient, byErrorType };
+  }
+
   async function retryJob(jobId: string): Promise<void> {
     const job = await Job.fromId(myQueue, jobId);
     if (!job) throw new Error(`Job ${jobId} not found in queue ${queueName(serviceName)}`);
@@ -131,7 +193,7 @@ export function createEventBus(config: EventBusConfig) {
     await Promise.all([...publishQueues.values()].map((q) => q.close()));
   }
 
-  return { publish, subscribe, startWorker, getFailedJobs, retryJob, ping, close };
+  return { publish, subscribe, startWorker, getFailedJobs, getFailedJobStats, retryJob, ping, close };
 }
 
 export type EventBus = ReturnType<typeof createEventBus>;
