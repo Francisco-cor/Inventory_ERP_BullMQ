@@ -58,7 +58,7 @@ export interface DlqStats {
 const ALL_SERVICES: ServiceName[] = ["svc-ordenes", "svc-stock", "svc-productos", "svc-obs"];
 
 function queueName(service: ServiceName): string {
-  return `events:${service}`;
+  return `events-${service}`;
 }
 
 const JOB_OPTIONS = {

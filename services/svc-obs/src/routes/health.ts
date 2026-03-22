@@ -32,22 +32,26 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (_req, reply) => {
+    console.log(`[health] Check requested for svc-obs`);
     let dbStatus = "ok";
     let redisStatus = "ok";
 
     try {
       await pool.query("SELECT 1");
-    } catch {
+    } catch (err) {
+      console.error(`[health] DB Error in svc-obs:`, err);
       dbStatus = "error";
     }
 
     try {
       await eventBus.ping();
-    } catch {
+    } catch (err) {
+      console.error(`[health] Redis Error in svc-obs:`, err);
       redisStatus = "error";
     }
 
     const healthy = dbStatus === "ok" && redisStatus === "ok";
+    console.log(`[health] svc-obs status: ${healthy ? "ok" : "degraded"} (db:${dbStatus}, redis:${redisStatus})`);
     return reply.status(healthy ? 200 : 503).send({
       status: healthy ? "ok" : "degraded",
       service: "svc-obs",

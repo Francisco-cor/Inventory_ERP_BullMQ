@@ -6,10 +6,10 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc -b",
     "start": "node dist/index.js",
     "migrate": "node-pg-migrate -d $DATABASE_URL -m migrations up",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc -b",
     "lint": "eslint src",
     "test": "vitest run"
   },
@@ -18,7 +18,7 @@
     "@erp/event-bus": "*",
     "bullmq": "^5.0.0",
     "fastify": "^5.0.0",
-    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/rate-limit": "^10.1.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
     "pg": "^8.13.0",

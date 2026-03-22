@@ -35,7 +35,7 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
       // Uses SET NX PX so the lock auto-expires if the process crashes mid-check.
       const redisClient = await queue!.client;
       const lockValue = randomUUID();
-      const acquired = await redisClient.set(LOCK_KEY, lockValue, "NX", "PX", LOCK_TTL_MS);
+      const acquired = await redisClient.set(LOCK_KEY, lockValue, "PX", LOCK_TTL_MS, "NX");
 
       if (!acquired) {
         console.log("[sla-checker] Lock held by another instance — skipping run");

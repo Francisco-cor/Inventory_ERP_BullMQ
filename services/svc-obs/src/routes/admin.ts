@@ -8,8 +8,6 @@ export async function adminRoutes(app: FastifyInstance) {
     {
       preHandler: [requireApiKey],
       schema: {
-        tags: ["admin"],
-        summary: "Listar eventos en la Dead Letter Queue",
         querystring: {
           type: "object",
           properties: {
@@ -30,8 +28,6 @@ export async function adminRoutes(app: FastifyInstance) {
     {
       preHandler: [requireApiKey],
       schema: {
-        tags: ["admin"],
-        summary: "Estadísticas de la Dead Letter Queue agrupadas por tipo de error",
       },
     },
     async () => {
@@ -45,8 +41,6 @@ export async function adminRoutes(app: FastifyInstance) {
     {
       preHandler: [requireApiKey],
       schema: {
-        tags: ["admin"],
-        summary: "Reintentar un job fallido de la Dead Letter Queue",
         params: {
           type: "object",
           properties: { jobId: { type: "string" } },

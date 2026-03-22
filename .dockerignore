@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+.git
+.github
+tests
+docs
+README.md
+LICENSE
+.env*
+!.env.example

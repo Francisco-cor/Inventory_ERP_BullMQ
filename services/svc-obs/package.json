@@ -6,9 +6,9 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc -b",
     "start": "node dist/index.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc -b"
   },
   "dependencies": {
     "@erp/shared-types": "*",
@@ -16,7 +16,7 @@
     "bullmq": "^5.0.0",
     "fastify": "^5.0.0",
     "@fastify/cors": "^10.0.0",
-    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/rate-limit": "^10.1.0",
     "pg": "^8.13.0"
   },
   "devDependencies": {

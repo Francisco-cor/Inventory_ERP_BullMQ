@@ -12,8 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "type-check": "tsc --noEmit"
+    "build": "tsc -b",
+    "type-check": "tsc -b"
   },
   "dependencies": {
     "@erp/shared-types": "*",

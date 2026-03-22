@@ -1,10 +1,10 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
 FROM base AS deps
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/event-bus/package.json ./packages/event-bus/
 COPY services/svc-productos/package.json ./services/svc-productos/

@@ -44,8 +44,7 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Install E2E test dependencies
-        working-directory: tests/e2e
+      - name: Install dependencies
         run: npm install
 
       - name: Run E2E tests
