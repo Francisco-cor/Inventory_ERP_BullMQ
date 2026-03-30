@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { EventEntry } from "../types.js";
 
 const EVENT_COLORS: Record<string, string> = {
@@ -42,7 +42,7 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
       es.addEventListener("event", (e: MessageEvent) => {
         attempt = 0; // reset backoff on successful message
         const entry: EventEntry = JSON.parse(e.data);
-        setEvents((prev) => {
+        setEvents((prev: EventEntry[]) => {
           const next = [...prev, entry];
           return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
         });
@@ -87,10 +87,10 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
 
   const filtered = filter
     ? events.filter(
-        (e) =>
+        (e: EventEntry) =>
           e.eventName.includes(filter) ||
           e.source.includes(filter) ||
-          e.correlationId.includes(filter)
+          (e.correlationId?.includes(filter) ?? false)
       )
     : events;
 
@@ -135,10 +135,10 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
             </span>
             <span style={styles.source}>{ev.source}</span>
             <span style={styles.correlationId}>
-              {ev.correlationId.slice(0, 8)}
+              {ev.correlationId?.slice(0, 8) || 'no-id'}
             </span>
             <span style={styles.payload}>
-              {JSON.stringify(ev.payload).slice(0, 80)}
+              {(JSON.stringify(ev.payload) || "").slice(0, 80)}
             </span>
           </div>
         ))}

@@ -70,7 +70,7 @@ export function StockAlerts({ apiBase, refreshTick }: Props) {
                 </span>
               </div>
               <div style={styles.alertMeta}>
-                <code style={{ fontSize: 10, color: "#6e7681" }}>{a.productoId.slice(0, 13)}…</code>
+                <code style={{ fontSize: 10, color: "#6e7681" }}>{(a.productoId || "").slice(0, 13)}…</code>
                 <span style={{ fontSize: 10, color: "#6e7681" }}>
                   {new Date(a.creadaEn).toLocaleTimeString()}
                 </span>

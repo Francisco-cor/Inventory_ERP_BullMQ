@@ -87,7 +87,7 @@ export function OrdersTable({ apiBase, slaWarningIds, refreshTick }: Props) {
                     }}
                   >
                     <td style={styles.td}>
-                      <code style={{ fontSize: 11 }}>{o.ordenId.slice(0, 13)}…</code>
+                      <code style={{ fontSize: 11 }}>{(o.ordenId || "").slice(0, 13)}…</code>
                     </td>
                     <td style={styles.td}>
                       <span

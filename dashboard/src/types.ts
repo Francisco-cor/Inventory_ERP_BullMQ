@@ -2,7 +2,7 @@ export interface EventEntry {
   eventId: string;
   eventName: string;
   source: string;
-  correlationId: string;
+  correlationId?: string;
   timestamp: string;
   payload: Record<string, unknown>;
 }
