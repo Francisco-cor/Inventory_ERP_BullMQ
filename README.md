@@ -4,10 +4,12 @@
 [![Build Status](https://github.com/Francisco-cor/Inventory_ERP_BullMQ/actions/workflows/ci.yml/badge.svg)](https://github.com/Francisco-cor/Inventory_ERP_BullMQ/actions/workflows/ci.yml)
 ![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![React](https://img.shields.io/badge/React-18.3.0-61DAFB?style=flat&logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
 ![Fastify](https://img.shields.io/badge/fastify-%23000000.svg?style=flat&logo=fastify&logoColor=white)
 ![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=flat&logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
+
 
 An inventory ERP built with strict data isolation, a verifiable event bus, and native real-time monitoring.
 
@@ -91,7 +93,7 @@ Scalable microservices architecture focused on high availability and end-to-end 
 - **Backend**: Node.js, TypeScript, Fastify (High-performance framework).
 - **Messaging / Events**: BullMQ, Redis (Pattern: **Saga Choreography**).
 - **Persistence**: PostgreSQL (**Polyglot Persistence** / DB-per-service).
-- **Observability**: Server-Sent Events (**SSE**), React (Real-time Dashboard).
+- **Observability**: Server-Sent Events (**SSE**), React 18 (Real-time Dashboard).
 - **Infrastructure**: Nginx (Reverse Proxy), Docker & Docker Compose.
 - **Testing**: Jest, Supertest (**E2E Testing**).
 
@@ -151,7 +153,7 @@ GET    /admin/stock/dlq                   → svc-stock dead-letter queue
 
 ---
 
-## 🔍 Observability & System Resilience
+## Observability & System Resilience
 
 The system implements an end-to-end observability stack for real-time tracking and automated fault detection.
 
