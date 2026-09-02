@@ -21,10 +21,13 @@ async function registrarAlertaSiCorresponde(
                    creada_en    = NOW()`,
     [productoId, sku, disponible, STOCK_UMBRAL, tipo]
   );
-  await publishEvent(
-    EVENTS.STOCK_ALERTA,
-    { productoId, sku, disponible, umbral: STOCK_UMBRAL, tipo }
-  );
+  await publishEvent(EVENTS.STOCK_ALERTA, {
+    productoId,
+    sku,
+    disponible,
+    umbral: STOCK_UMBRAL,
+    tipo,
+  });
 }
 
 export async function stockRoutes(app: FastifyInstance) {
@@ -90,10 +93,7 @@ export async function stockRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { productoId } = req.params as { productoId: string };
 
-      const { rows } = await pool.query(
-        "SELECT * FROM stock WHERE producto_id = $1",
-        [productoId]
-      );
+      const { rows } = await pool.query("SELECT * FROM stock WHERE producto_id = $1", [productoId]);
 
       if (rows.length === 0) {
         return reply.status(404).send({
@@ -183,11 +183,7 @@ export async function stockRoutes(app: FastifyInstance) {
         await publishEvent(EVENTS.STOCK_AJUSTADO, { productoId, delta, motivo });
 
         // Registrar alerta si el stock disponible cae bajo el umbral
-        await registrarAlertaSiCorresponde(
-          productoId,
-          updated[0].sku,
-          updated[0].disponible
-        );
+        await registrarAlertaSiCorresponde(productoId, updated[0].sku, updated[0].disponible);
 
         return { data: updated[0] };
       } catch (err) {

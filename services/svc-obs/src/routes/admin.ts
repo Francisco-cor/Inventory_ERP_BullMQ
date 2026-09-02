@@ -27,8 +27,7 @@ export async function adminRoutes(app: FastifyInstance) {
     "/dlq/stats",
     {
       preHandler: [requireApiKey],
-      schema: {
-      },
+      schema: {},
     },
     async () => {
       const stats = await eventBus.getFailedJobStats();

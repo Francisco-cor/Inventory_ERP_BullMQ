@@ -1,9 +1,5 @@
 import { EVENTS } from "@erp/event-bus";
-import type {
-  DomainEvent,
-  OrdenCreadaPayload,
-  OrdenCanceladaPayload,
-} from "@erp/shared-types";
+import type { DomainEvent, OrdenCreadaPayload, OrdenCanceladaPayload } from "@erp/shared-types";
 import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
@@ -140,7 +136,13 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
       );
       await publishEvent(
         EVENTS.STOCK_ALERTA,
-        { productoId: linea.productoId, sku: s[0].sku, disponible: s[0].disponible, umbral: STOCK_UMBRAL, tipo },
+        {
+          productoId: linea.productoId,
+          sku: s[0].sku,
+          disponible: s[0].disponible,
+          umbral: STOCK_UMBRAL,
+          tipo,
+        },
         event.correlationId
       );
     }
@@ -181,7 +183,12 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
       await client.query(
         `INSERT INTO movimientos_stock (producto_id, tipo, delta, referencia_id, motivo)
          VALUES ($1, 'liberacion', $2, $3, $4)`,
-        [reserva.producto_id, reserva.cantidad, ordenId, `Liberación por cancelación de orden ${ordenId}`]
+        [
+          reserva.producto_id,
+          reserva.cantidad,
+          ordenId,
+          `Liberación por cancelación de orden ${ordenId}`,
+        ]
       );
     }
 
@@ -195,7 +202,10 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
     if (reservas.length > 0) {
       await publishEvent(
         EVENTS.STOCK_LIBERADO,
-        { ordenId, items: reservas.map((r) => ({ productoId: r.producto_id, cantidad: r.cantidad })) },
+        {
+          ordenId,
+          items: reservas.map((r) => ({ productoId: r.producto_id, cantidad: r.cantidad })),
+        },
         event.correlationId
       );
     }

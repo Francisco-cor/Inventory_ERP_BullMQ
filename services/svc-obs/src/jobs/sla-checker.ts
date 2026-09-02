@@ -46,7 +46,11 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
         const client = await pool.connect();
         try {
           // Find orders pending longer than the threshold
-          const { rows } = await client.query<{ orden_id: string; creada_en: Date; segundos: number }>(
+          const { rows } = await client.query<{
+            orden_id: string;
+            creada_en: Date;
+            segundos: number;
+          }>(
             `SELECT orden_id, creada_en,
                     EXTRACT(EPOCH FROM (NOW() - creada_en))::int AS segundos
              FROM ordenes_sla

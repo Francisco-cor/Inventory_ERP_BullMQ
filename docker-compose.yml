@@ -14,15 +14,14 @@ volumes:
   redis-data:
 
 services:
-
   # ── postgres-productos ──────────────────────────────────────────────────────
   postgres-productos:
     image: postgres:16-alpine
     container_name: postgres-productos
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       productos_db
-      POSTGRES_USER:     productos_user
+      POSTGRES_DB: productos_db
+      POSTGRES_USER: productos_user
       POSTGRES_PASSWORD: productos_pass
     volumes:
       - pg-productos-data:/var/lib/postgresql/data
@@ -43,8 +42,8 @@ services:
     container_name: postgres-ordenes
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       ordenes_db
-      POSTGRES_USER:     ordenes_user
+      POSTGRES_DB: ordenes_db
+      POSTGRES_USER: ordenes_user
       POSTGRES_PASSWORD: ordenes_pass
     volumes:
       - pg-ordenes-data:/var/lib/postgresql/data
@@ -65,8 +64,8 @@ services:
     container_name: postgres-stock
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       stock_db
-      POSTGRES_USER:     stock_user
+      POSTGRES_DB: stock_db
+      POSTGRES_USER: stock_user
       POSTGRES_PASSWORD: stock_pass
     volumes:
       - pg-stock-data:/var/lib/postgresql/data
@@ -108,12 +107,12 @@ services:
     container_name: svc-productos
     restart: unless-stopped
     environment:
-      NODE_ENV:     production
-      PORT:         3001
+      NODE_ENV: production
+      PORT: 3001
       DATABASE_URL: postgres://productos_user:productos_pass@postgres-productos:5432/productos_db
-      REDIS_HOST:   redis
-      REDIS_PORT:   6379
-      LOG_LEVEL:    info
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
     depends_on:
       postgres-productos:
         condition: service_healthy
@@ -136,12 +135,12 @@ services:
     container_name: svc-ordenes
     restart: unless-stopped
     environment:
-      NODE_ENV:     production
-      PORT:         3002
+      NODE_ENV: production
+      PORT: 3002
       DATABASE_URL: postgres://ordenes_user:ordenes_pass@postgres-ordenes:5432/ordenes_db
-      REDIS_HOST:   redis
-      REDIS_PORT:   6379
-      LOG_LEVEL:    info
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
     depends_on:
       postgres-ordenes:
         condition: service_healthy
@@ -164,13 +163,13 @@ services:
     container_name: svc-stock
     restart: unless-stopped
     environment:
-      NODE_ENV:              production
-      PORT:                  3003
-      DATABASE_URL:          postgres://stock_user:stock_pass@postgres-stock:5432/stock_db
-      REDIS_HOST:            redis
-      REDIS_PORT:            6379
-      LOG_LEVEL:             info
-      STOCK_ALERTA_UMBRAL:   10
+      NODE_ENV: production
+      PORT: 3003
+      DATABASE_URL: postgres://stock_user:stock_pass@postgres-stock:5432/stock_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
+      STOCK_ALERTA_UMBRAL: 10
     depends_on:
       postgres-stock:
         condition: service_healthy
@@ -191,8 +190,8 @@ services:
     container_name: postgres-obs
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       obs_db
-      POSTGRES_USER:     obs_user
+      POSTGRES_DB: obs_db
+      POSTGRES_USER: obs_user
       POSTGRES_PASSWORD: obs_pass
     volumes:
       - pg-obs-data:/var/lib/postgresql/data
@@ -215,14 +214,14 @@ services:
     container_name: svc-obs
     restart: unless-stopped
     environment:
-      NODE_ENV:               production
-      PORT:                   3004
-      DATABASE_URL:           postgres://obs_user:obs_pass@postgres-obs:5432/obs_db
-      REDIS_HOST:             redis
-      REDIS_PORT:             6379
-      LOG_LEVEL:              info
-      SLA_THRESHOLD_SECONDS:  60
-      SLA_CHECK_INTERVAL_MS:  30000
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgres://obs_user:obs_pass@postgres-obs:5432/obs_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
+      SLA_THRESHOLD_SECONDS: 60
+      SLA_CHECK_INTERVAL_MS: 30000
     depends_on:
       postgres-obs:
         condition: service_healthy

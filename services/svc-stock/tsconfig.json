@@ -9,8 +9,5 @@
     }
   },
   "include": ["src"],
-  "references": [
-    { "path": "../../packages/shared-types" },
-    { "path": "../../packages/event-bus" }
-  ]
+  "references": [{ "path": "../../packages/shared-types" }, { "path": "../../packages/event-bus" }]
 }

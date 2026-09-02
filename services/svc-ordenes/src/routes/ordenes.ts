@@ -3,11 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { publishEvent, EVENTS } from "../events/publisher.js";
 import { CrearOrdenSchema } from "../domain/orden.schema.js";
-import {
-  type EstadoOrden,
-  puedeTransicionar,
-  describir,
-} from "../domain/orden.statemachine.js";
+import { type EstadoOrden, puedeTransicionar, describir } from "../domain/orden.statemachine.js";
 import { requireApiKey } from "../plugins/auth.js";
 
 export async function ordenesRoutes(app: FastifyInstance) {
@@ -29,7 +25,11 @@ export async function ordenesRoutes(app: FastifyInstance) {
       },
     },
     async (req) => {
-      const { estado, page = 1, pageSize = 20 } = req.query as {
+      const {
+        estado,
+        page = 1,
+        pageSize = 20,
+      } = req.query as {
         estado?: string;
         page?: number;
         pageSize?: number;
@@ -37,9 +37,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
       const offset = (page - 1) * pageSize;
 
       const whereClause = estado ? "WHERE o.estado = $3" : "";
-      const params = estado
-        ? [pageSize, offset, estado]
-        : [pageSize, offset];
+      const params = estado ? [pageSize, offset, estado] : [pageSize, offset];
 
       const { rows: ordenes } = await pool.query(
         `SELECT o.id, o.estado, o.total, o.creada_en, o.actualizada_en,
@@ -169,9 +167,8 @@ export async function ordenesRoutes(app: FastifyInstance) {
       }
 
       const { lineas } = parsed.data;
-      const total = Math.round(
-        lineas.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0) * 100
-      ) / 100;
+      const total =
+        Math.round(lineas.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0) * 100) / 100;
       const ordenId = randomUUID();
       const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
@@ -245,10 +242,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
       const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
       // Fetch current state to validate transition explicitly
-      const { rows: current } = await pool.query(
-        "SELECT estado FROM ordenes WHERE id = $1",
-        [id]
-      );
+      const { rows: current } = await pool.query("SELECT estado FROM ordenes WHERE id = $1", [id]);
 
       if (current.length === 0) {
         return reply.status(404).send({

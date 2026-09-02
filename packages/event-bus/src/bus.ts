@@ -17,8 +17,14 @@ export type EventHandler<T = unknown> = (event: DomainEvent<T>) => Promise<void>
 export const CURRENT_SCHEMA_VERSION = "1.0";
 
 const TRANSIENT_KEYWORDS = [
-  "econnrefused", "etimedout", "econnreset", "connect", "timeout",
-  "unavailable", "redis", "network",
+  "econnrefused",
+  "etimedout",
+  "econnreset",
+  "connect",
+  "timeout",
+  "unavailable",
+  "redis",
+  "network",
 ] as const;
 
 function extractErrorType(reason: string): string {
@@ -118,11 +124,7 @@ export function createEventBus(config: EventBusConfig) {
     console.log(`[event-bus] ${serviceName} worker started → queue: ${queueName(serviceName)}`);
   }
 
-  async function publish<T>(
-    name: EventName,
-    payload: T,
-    correlationId?: string
-  ): Promise<string> {
+  async function publish<T>(name: EventName, payload: T, correlationId?: string): Promise<string> {
     const event: DomainEvent<T> = {
       id: randomUUID(),
       name,
@@ -134,9 +136,7 @@ export function createEventBus(config: EventBusConfig) {
     };
 
     // Fan-out: deliver to every service queue concurrently
-    await Promise.all(
-      ALL_SERVICES.map((s) => publishQueues.get(s)!.add(name, event, JOB_OPTIONS))
-    );
+    await Promise.all(ALL_SERVICES.map((s) => publishQueues.get(s)!.add(name, event, JOB_OPTIONS)));
 
     return event.id;
   }
@@ -193,7 +193,16 @@ export function createEventBus(config: EventBusConfig) {
     await Promise.all([...publishQueues.values()].map((q) => q.close()));
   }
 
-  return { publish, subscribe, startWorker, getFailedJobs, getFailedJobStats, retryJob, ping, close };
+  return {
+    publish,
+    subscribe,
+    startWorker,
+    getFailedJobs,
+    getFailedJobStats,
+    retryJob,
+    ping,
+    close,
+  };
 }
 
 export type EventBus = ReturnType<typeof createEventBus>;

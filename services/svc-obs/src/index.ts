@@ -11,9 +11,9 @@ import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
 import { startSlaChecker, stopSlaChecker } from "./jobs/sla-checker.js";
 
-const PORT       = Number(process.env.PORT      ?? 3004);
-const HOST       = process.env.HOST             ?? "0.0.0.0";
-const REDIS_HOST = process.env.REDIS_HOST       ?? "localhost";
+const PORT = Number(process.env.PORT ?? 3004);
+const HOST = process.env.HOST ?? "0.0.0.0";
+const REDIS_HOST = process.env.REDIS_HOST ?? "localhost";
 const REDIS_PORT = Number(process.env.REDIS_PORT ?? 6379);
 
 const app = Fastify({

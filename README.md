@@ -1,4 +1,5 @@
 # Inventory ERP — Event-Driven Microservices
+
 > **Event-driven microservices architecture with Saga orchestration and real-time observability.**
 
 [![Build Status](https://github.com/Francisco-cor/Inventory_ERP_BullMQ/actions/workflows/ci.yml/badge.svg)](https://github.com/Francisco-cor/Inventory_ERP_BullMQ/actions/workflows/ci.yml)
@@ -9,7 +10,6 @@
 ![Fastify](https://img.shields.io/badge/fastify-%23000000.svg?style=flat&logo=fastify&logoColor=white)
 ![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=flat&logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
-
 
 An inventory ERP built with strict data isolation, a verifiable event bus, and native real-time monitoring.
 
@@ -102,32 +102,37 @@ Scalable microservices architecture focused on high availability and end-to-end 
 ## Design Decisions
 
 ### 1. Database per Service
+
 Each service has its own Postgres instance. No cross-service JOINs, no cross-database foreign keys. If `svc-orders` goes down, `svc-stock` remains functional. Denormalized data in `order_lines` (SKU, price) captures the state at the time of the transaction.
 
 ### 2. Fan-out via Dedicated Queues
+
 `publish()` writes events to `events:svc-orders`, `events:svc-stock`, `events:svc-products`, and `events:svc-obs` simultaneously. Each service consumes only its own queue. This eliminates "competing consumers" bugs that occur when multiple workers share a single queue for different purposes.
 
 ### 3. Explicit Idempotency
+
 Each service maintains a `received_events` table. Before processing any event, it inserts the `event_id`. If it already exists, the event is discarded. This guarantees at-least-once delivery without double-processing effects (BullMQ with retries + exponential backoff).
 
 ### 4. Trace Correlation
+
 Every event carries a `correlationId` propagated from the original HTTP request. The `svc-obs` event log allows reconstructing the full request tree: `order.created → stock.reserved → order.confirmed`.
 
 ### 5. SLA as a Job, Not Client Polling
+
 A BullMQ repeating job in `svc-obs` checks every 30s for orders in `pending` state older than 60s. These are marked as `sla_warning` and transmitted via SSE. The client does not poll.
 
 ---
 
 ## Services
 
-| Service | Port | Responsibility |
-|---|---|---|
-| svc-products | 3001 | Product catalog, emit `product.*` |
-| svc-orders | 3002 | Order state (state machine), emit `order.*` |
-| svc-stock | 3003 | Stock, reservations, alerts, emit `stock.*` |
-| svc-obs | 3004 | Event log, SSE stream, SLA monitor |
-| dashboard | 3000 | Real-time observability UI |
-| nginx | 80 | Reverse proxy, header correlation |
+| Service      | Port | Responsibility                              |
+| ------------ | ---- | ------------------------------------------- |
+| svc-products | 3001 | Product catalog, emit `product.*`           |
+| svc-orders   | 3002 | Order state (state machine), emit `order.*` |
+| svc-stock    | 3003 | Stock, reservations, alerts, emit `stock.*` |
+| svc-obs      | 3004 | Event log, SSE stream, SLA monitor          |
+| dashboard    | 3000 | Real-time observability UI                  |
+| nginx        | 80   | Reverse proxy, header correlation           |
 
 ### Key API Endpoints
 
@@ -158,29 +163,36 @@ GET    /admin/stock/dlq                   → svc-stock dead-letter queue
 The system implements an end-to-end observability stack for real-time tracking and automated fault detection.
 
 ### 1. Global Visibility
+
 ![Global Visibility](docs/screenshots/dashboard_full.png)
 **Technical Context**: Real-time Event Log powered by **Server-Sent Events (SSE)**. It reconstructs the complete execution trace across all services without page reloads.
 
 ### 2. Inventory Intelligence
+
 ![Inventory Intelligence](docs/screenshots/stock_alert.png)
 **Technical Context**: Proactive Alerting system triggers based on configurable thresholds (e.g., 10 units). Internal events drive dynamic dashboard updates via SSE for immediate stock management.
 
 ### 3. Distributed Business Logic (Error Handling)
+
 ![Distributed Business Logic](docs/screenshots/out_of_stock.png)
 **Technical Context**: Distributed logic for event compensation. Failed stock reservations trigger automatic state transitions to `cancelled` in the orders service, ensuring systemic consistency across domain boundaries.
 
 ### 4. SLA Monitoring & Recovery Flow
+
 Automated sequence for latency detection and state recovery.
 
 #### Step A: Order Pending
+
 ![Order Pending](docs/screenshots/pending_order.png)
 Newly created orders enter a **PENDING** state while the event bus handles initial propagation.
 
 #### Step B: Critical SLA Warning
+
 ![SLA Warning](docs/screenshots/sla_warning.png)
 The **SLA Monitor** (BullMQ repeatable job) detects delays exceeding 60 seconds and flags the record, alerting operators to potential service bottlenecks.
 
 #### Step C: Automated Recovery
+
 ![Order Confirmed](docs/screenshots/confirmed_order.png)
 Systemic self-healing: Orders transition to **CONFIRMED** automatically as soon as downstream consumers process the accumulated backlog.
 
@@ -188,8 +200,28 @@ Systemic self-healing: Orders transition to **CONFIRMED** automatically as soon 
 
 ## Running with Docker
 
+### Development (hot-reload)
+
+```bash
+# 1-liner con Makefile o npm
+make dev              # hot-reload (tsx watch) via docker-compose.dev.yml
+# o
+npm run dev
+# o
+./scripts/dev.sh
+
+# Con file-sync automático (compose v2.22+)
+make dev-watch
+```
+
+Override `docker-compose.dev.yml` monta `services/*/src` y `packages/*` para HMR. Dashboard en Vite HMR en `http://localhost:3000`. Ver `docs/adr/004-tooling-dx.md` y `docs/runbook.md`.
+
+### Production
+
 ```bash
 docker compose up --build -d
+# o
+make up
 ```
 
 This starts: 4 Postgres instances, Redis, 4 Node.js services, nginx, and the React dashboard.
@@ -208,6 +240,20 @@ open http://localhost:3000
 open http://localhost/products/docs
 open http://localhost/orders/docs
 open http://localhost/stock/docs
+
+# Seeds determinísticos (Fase 1)
+make seed
+./scripts/seed.sh
+```
+
+### Tooling
+
+```bash
+make type-check   # tsc en todos los workspaces
+make lint         # eslint flat config
+make lint-fix
+make format       # prettier --write
+make format-check # prettier --check (CI)
 ```
 
 ---
@@ -225,6 +271,7 @@ cd tests/e2e && npm install && npm test
 ```
 
 Verifications include:
+
 1. Create product → stock automatically initialized via event.
 2. Adjust stock.
 3. Create order → initial state `pending`.
@@ -239,6 +286,7 @@ It also verifies failure flows: when stock is insufficient, the order transition
 ## CI/CD
 
 GitHub Actions runs E2E tests on every push/PR to `main`:
+
 - Spins up all services with `docker compose up --build`.
 - Waits for nginx to respond at `/health/*`.
 - Executes E2E tests against `http://localhost:80`.
@@ -252,3 +300,4 @@ See `.github/workflows/ci.yml`.
 - [ADR #001](docs/adr/001-polyglot-persistence.md) — Database per service
 - [ADR #002](docs/adr/002-state-machine-orders.md) — Explicit state machine for orders
 - [ADR #003](docs/adr/003-event-bus-vs-http.md) — Event bus vs synchronous HTTP
+- [ADR #004](docs/adr/004-tooling-dx.md) — Tooling y DX unificados (Fase 1)

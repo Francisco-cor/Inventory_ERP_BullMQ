@@ -2,16 +2,16 @@ import { useEffect, useState, useCallback } from "react";
 import type { OrdenSla } from "../types.js";
 
 const ESTADO_COLOR: Record<string, string> = {
-  pendiente:   "#e3b341",
-  confirmada:  "#3fb950",
-  cancelada:   "#f85149",
+  pendiente: "#e3b341",
+  confirmada: "#3fb950",
+  cancelada: "#f85149",
   sla_warning: "#ff6b6b",
 };
 
 const ESTADO_LABEL: Record<string, string> = {
-  pendiente:   "PENDIENTE",
-  confirmada:  "CONFIRMADA",
-  cancelada:   "CANCELADA",
+  pendiente: "PENDIENTE",
+  confirmada: "CONFIRMADA",
+  cancelada: "CANCELADA",
   sla_warning: "⚠ SLA WARNING",
 };
 
@@ -71,7 +71,9 @@ export function OrdersTable({ apiBase, slaWarningIds, refreshTick }: Props) {
             <thead>
               <tr>
                 {["Orden ID", "Estado", "Creada", "Duración"].map((h) => (
-                  <th key={h} style={styles.th}>{h}</th>
+                  <th key={h} style={styles.th}>
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -104,7 +106,9 @@ export function OrdersTable({ apiBase, slaWarningIds, refreshTick }: Props) {
                     <td style={{ ...styles.td, color: "#8b949e", fontSize: 11 }}>
                       {new Date(o.creadaEn).toLocaleTimeString()}
                     </td>
-                    <td style={{ ...styles.td, color: isSla ? "#ff6b6b" : "#8b949e", fontSize: 11 }}>
+                    <td
+                      style={{ ...styles.td, color: isSla ? "#ff6b6b" : "#8b949e", fontSize: 11 }}
+                    >
                       {o.duracionSegundos}s
                     </td>
                   </tr>
@@ -140,7 +144,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #30363d",
     background: "#0d1117",
   },
-  title:    { fontSize: 14, fontWeight: 600 },
+  title: { fontSize: 14, fontWeight: 600 },
   subtitle: { fontSize: 11, color: "#6e7681" },
   tableWrapper: { overflowY: "auto", maxHeight: 340 },
   table: { width: "100%", borderCollapse: "collapse" },

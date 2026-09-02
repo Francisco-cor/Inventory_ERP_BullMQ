@@ -7,7 +7,7 @@ import { StockAlerts } from "./components/StockAlerts.js";
 // that also proxies svc-obs, so origin-relative paths work.
 // In dev (Vite proxy), also origin-relative.
 const API_BASE = "";
-const SSE_URL  = "/api/v1/obs/events/stream";
+const SSE_URL = "/api/v1/obs/events/stream";
 
 export default function App() {
   const [slaWarningIds, setSlaWarningIds] = useState<Set<string>>(new Set());
@@ -32,7 +32,9 @@ export default function App() {
         </div>
         <div style={styles.services}>
           {["productos", "ordenes", "stock", "obs"].map((svc) => (
-            <span key={svc} style={styles.serviceTag}>svc-{svc}</span>
+            <span key={svc} style={styles.serviceTag}>
+              svc-{svc}
+            </span>
           ))}
         </div>
       </header>
@@ -45,11 +47,7 @@ export default function App() {
 
         {/* Two-column bottom row */}
         <div style={styles.twoCol}>
-          <OrdersTable
-            apiBase={API_BASE}
-            slaWarningIds={slaWarningIds}
-            refreshTick={refreshTick}
-          />
+          <OrdersTable apiBase={API_BASE} slaWarningIds={slaWarningIds} refreshTick={refreshTick} />
           <StockAlerts apiBase={API_BASE} refreshTick={refreshTick} />
         </div>
       </main>
@@ -71,7 +69,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #30363d",
     background: "#0d1117",
   },
-  title:    { fontSize: 18, fontWeight: 700, color: "#e6edf3" },
+  title: { fontSize: 18, fontWeight: 700, color: "#e6edf3" },
   subtitle: { fontSize: 12, color: "#6e7681", marginTop: 2 },
   services: { display: "flex", gap: 6 },
   serviceTag: {

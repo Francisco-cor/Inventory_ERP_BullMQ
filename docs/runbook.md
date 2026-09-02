@@ -17,31 +17,88 @@ Todos los comandos asumen que el stack está levantado con Docker Compose.
 
 ## 1. Levantar y bajar el stack
 
-### Levantar (build + start)
+### Modo desarrollo (hot-reload) — recomendado
+
+```bash
+# Opción A: Makefile
+make dev              # hot-reload con tsx watch
+make dev-watch        # con compose --watch (v2.22+)
+make logs             # seguir logs
+
+# Opción B: npm
+npm run dev           # alias a docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# Opción C: script
+./scripts/dev.sh              # hot-reload
+./scripts/dev.sh --watch      # con file-sync
+```
+
+El override `docker-compose.dev.yml` monta `services/*/src`, `packages/*` y usa `target: deps` + `tsx watch` con `CHOKIDAR_USEPOLLING=true` para HMR en Docker (Windows/Mac). El dashboard corre en Vite HMR (`http://localhost:3000`) en vez de Nginx build.
+
+### Modo productivo (build + start)
+
 ```bash
 docker compose up -d --build
+# o
+make up
 ```
 
 ### Ver logs de un servicio
+
 ```bash
 docker compose logs -f svc-ordenes
 docker compose logs -f svc-stock
+# o
+make logs-obs
 ```
 
 ### Bajar conservando datos
+
 ```bash
 docker compose down
+# o
+make down
 ```
 
 ### Bajar y **destruir todos los volúmenes** (reset completo de BD y Redis)
+
 ```bash
 docker compose down -v
+# o
+make down-v
 ```
+
 > **Atención**: esto borra todos los datos persistidos. Usar solo en desarrollo o para reiniciar desde cero.
 
 ### Reiniciar un servicio individual sin bajar todo el stack
+
 ```bash
 docker compose restart svc-stock
+```
+
+### Seeds determinísticos (Fase 1)
+
+```bash
+make seed
+# o manual
+./scripts/seed.sh
+# o por servicio
+DATABASE_URL=postgres://productos_user:productos_pass@localhost:5433/productos_db npm run seed --workspace=@erp/svc-productos
+DATABASE_URL=postgres://stock_user:stock_pass@localhost:5435/stock_db npm run seed --workspace=@erp/svc-stock
+```
+
+Seeds idempotentes con IDs fijos (`11111111-...001` / `SKU-SEED-001`..`005`). Ver `services/svc-*/src/seed.ts`.
+
+### Tooling (Fase 1)
+
+```bash
+make type-check   # tsc en todos los workspaces
+make lint         # eslint flat config (raíz)
+make lint-fix     # eslint --fix
+make format       # prettier --write
+make format-check # prettier --check (CI)
+npm run lint      # alias root
+npm run format:check
 ```
 
 ---
@@ -67,6 +124,7 @@ curl -H "X-Api-Key: $ADMIN_API_KEY" http://localhost/api/v1/ordenes/admin/dlq/st
 ```
 
 Respuesta de ejemplo:
+
 ```json
 {
   "data": {
@@ -122,17 +180,20 @@ Cada servicio tiene una función `rollbackLastMigration` en `src/db/migrate.ts` 
 ### Rollback manual vía psql (método más directo)
 
 1. Identificar la última migración aplicada:
+
 ```sql
 SELECT version, aplicada_en FROM schema_migrations ORDER BY aplicada_en DESC LIMIT 5;
 ```
 
 2. Ejecutar el SQL de rollback correspondiente, por ejemplo para svc-stock migración 003:
+
 ```bash
 docker compose exec -T db-stock psql -U stock_user -d stock_db \
   < services/svc-stock/migrations/003_alertas_unique_down.sql
 ```
 
 3. Eliminar el registro de la migración:
+
 ```sql
 DELETE FROM schema_migrations WHERE version = '003_alertas_unique';
 ```
@@ -205,6 +266,7 @@ done
 ```
 
 Salida esperada:
+
 ```
 svc-productos: 200
 svc-ordenes: 200

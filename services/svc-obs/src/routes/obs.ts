@@ -56,70 +56,77 @@ export async function obsRoutes(app: FastifyInstance): Promise<void> {
   // ── Event log (paginated REST) ─────────────────────────────────────────────
   app.get<{
     Querystring: { page?: string; pageSize?: string; eventName?: string; source?: string };
-  }>("/events", {
-    schema: {
-      querystring: {
-        type: "object",
-        properties: {
-          page:      { type: "string" },
-          pageSize:  { type: "string" },
-          eventName: { type: "string" },
-          source:    { type: "string" },
+  }>(
+    "/events",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          properties: {
+            page: { type: "string" },
+            pageSize: { type: "string" },
+            eventName: { type: "string" },
+            source: { type: "string" },
+          },
         },
       },
     },
-  }, async (req, reply) => {
-    const page     = Math.max(1, Number(req.query.page     ?? 1));
-    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 50)));
-    const offset   = (page - 1) * pageSize;
+    async (req, reply) => {
+      const page = Math.max(1, Number(req.query.page ?? 1));
+      const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 50)));
+      const offset = (page - 1) * pageSize;
 
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+      const conditions: string[] = [];
+      const params: unknown[] = [];
 
-    if (req.query.eventName) {
-      params.push(req.query.eventName);
-      conditions.push(`event_name = $${params.length}`);
-    }
-    if (req.query.source) {
-      params.push(req.query.source);
-      conditions.push(`source = $${params.length}`);
-    }
+      if (req.query.eventName) {
+        params.push(req.query.eventName);
+        conditions.push(`event_name = $${params.length}`);
+      }
+      if (req.query.source) {
+        params.push(req.query.source);
+        conditions.push(`source = $${params.length}`);
+      }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    params.push(pageSize, offset);
-    const limitClause = `LIMIT $${params.length - 1} OFFSET $${params.length}`;
+      params.push(pageSize, offset);
+      const limitClause = `LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
-    const [{ rows }, { rows: countRows }] = await Promise.all([
-      pool.query(
-        `SELECT event_id, event_name, source, correlation_id, payload, emitido_en, recibido_en
+      const [{ rows }, { rows: countRows }] = await Promise.all([
+        pool.query(
+          `SELECT event_id, event_name, source, correlation_id, payload, emitido_en, recibido_en
          FROM event_log
          ${where}
          ORDER BY emitido_en DESC
          ${limitClause}`,
-        params
-      ),
-      pool.query(`SELECT COUNT(*)::int AS total FROM event_log ${where}`, params.slice(0, conditions.length)),
-    ]);
+          params
+        ),
+        pool.query(
+          `SELECT COUNT(*)::int AS total FROM event_log ${where}`,
+          params.slice(0, conditions.length)
+        ),
+      ]);
 
-    return reply.send({
-      data: rows.map((r) => ({
-        eventId:       r.event_id,
-        eventName:     r.event_name,
-        source:        r.source,
-        correlationId: r.correlation_id,
-        payload:       r.payload,
-        timestamp:     r.emitido_en,
-        recibidoEn:    r.recibido_en,
-      })),
-      meta: {
-        total:      countRows[0]?.total ?? 0,
-        page,
-        pageSize,
-        totalPages: Math.ceil((countRows[0]?.total ?? 0) / pageSize),
-      },
-    });
-  });
+      return reply.send({
+        data: rows.map((r) => ({
+          eventId: r.event_id,
+          eventName: r.event_name,
+          source: r.source,
+          correlationId: r.correlation_id,
+          payload: r.payload,
+          timestamp: r.emitido_en,
+          recibidoEn: r.recibido_en,
+        })),
+        meta: {
+          total: countRows[0]?.total ?? 0,
+          page,
+          pageSize,
+          totalPages: Math.ceil((countRows[0]?.total ?? 0) / pageSize),
+        },
+      });
+    }
+  );
 
   // ── SLA alerts ─────────────────────────────────────────────────────────────
   app.get("/sla/alerts", async (_req, reply) => {
@@ -134,10 +141,10 @@ export async function obsRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({
       data: rows.map((r) => ({
-        ordenId:           r.orden_id,
-        creadaEn:          r.creada_en,
+        ordenId: r.orden_id,
+        creadaEn: r.creada_en,
         segundosPendiente: r.segundos_pendiente,
-        estadoSla:         r.estado_sla,
+        estadoSla: r.estado_sla,
       })),
     });
   });
@@ -157,10 +164,10 @@ export async function obsRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({
       data: rows.map((r) => ({
-        ordenId:          r.orden_id,
-        creadaEn:         r.creada_en,
-        resueltaEn:       r.resuelta_en,
-        estadoSla:        r.estado_sla,
+        ordenId: r.orden_id,
+        creadaEn: r.creada_en,
+        resueltaEn: r.resuelta_en,
+        estadoSla: r.estado_sla,
         duracionSegundos: r.duracion_segundos,
       })),
     });

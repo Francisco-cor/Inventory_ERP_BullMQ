@@ -17,7 +17,7 @@ import http from "node:http";
 import supertest from "supertest";
 
 const BASE = process.env.ERP_BASE_URL ?? "http://localhost:80";
-const api  = supertest(BASE);
+const api = supertest(BASE);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -47,11 +47,18 @@ function waitForSseEvent(
   return new Promise((resolve, reject) => {
     let settled = false;
     const settle = (fn: () => void) => {
-      if (!settled) { settled = true; fn(); }
+      if (!settled) {
+        settled = true;
+        fn();
+      }
     };
 
     const timer = setTimeout(
-      () => settle(() => { req.destroy(); reject(new Error(`waitForSseEvent timed out after ${timeoutMs}ms`)); }),
+      () =>
+        settle(() => {
+          req.destroy();
+          reject(new Error(`waitForSseEvent timed out after ${timeoutMs}ms`));
+        }),
       timeoutMs
     );
 
@@ -73,19 +80,35 @@ function waitForSseEvent(
             try {
               const parsed = JSON.parse(currentData);
               if (predicate(currentEvent, parsed)) {
-                settle(() => { clearTimeout(timer); req.destroy(); resolve(parsed); });
+                settle(() => {
+                  clearTimeout(timer);
+                  req.destroy();
+                  resolve(parsed);
+                });
               }
-            } catch { /* ignore malformed frames */ }
+            } catch {
+              /* ignore malformed frames */
+            }
             currentEvent = "message";
             currentData = "";
           }
         }
       });
 
-      res.on("error", (err) => settle(() => { clearTimeout(timer); reject(err); }));
+      res.on("error", (err) =>
+        settle(() => {
+          clearTimeout(timer);
+          reject(err);
+        })
+      );
     });
 
-    req.on("error", (err) => settle(() => { clearTimeout(timer); reject(err); }));
+    req.on("error", (err) =>
+      settle(() => {
+        clearTimeout(timer);
+        reject(err);
+      })
+    );
   });
 }
 
@@ -107,8 +130,8 @@ const SSE_URL = `${BASE}/api/v1/obs/events/stream`;
 describe("ERP — full order flow", () => {
   let productoId: string;
   let ordenId: string;
-  const SKU       = `E2E-${Date.now()}`;
-  const CANTIDAD  = 3;
+  const SKU = `E2E-${Date.now()}`;
+  const CANTIDAD = 3;
   const STOCK_INI = 20;
 
   // ── Step 1: Create product ─────────────────────────────────────────────────
@@ -116,7 +139,7 @@ describe("ERP — full order flow", () => {
     const res = await api
       .post("/api/v1/productos")
       .send({
-        sku:    SKU,
+        sku: SKU,
         nombre: "Producto E2E Test",
         precio: 99.99,
         unidad: "pza",
@@ -141,7 +164,7 @@ describe("ERP — full order flow", () => {
     const res = await api
       .post(`/api/v1/stock/${productoId}/ajustar`)
       .send({
-        delta:  STOCK_INI,
+        delta: STOCK_INI,
         motivo: "Inventario inicial E2E",
       })
       .expect(200);
@@ -157,8 +180,8 @@ describe("ERP — full order flow", () => {
         lineas: [
           {
             productoId,
-            sku:            SKU,
-            cantidad:       CANTIDAD,
+            sku: SKU,
+            cantidad: CANTIDAD,
             precioUnitario: 99.99,
           },
         ],
@@ -174,11 +197,7 @@ describe("ERP — full order flow", () => {
   // Subscribes to the svc-obs SSE stream and waits for the orden.confirmada
   // domain event instead of busy-polling the REST endpoint.
   test("4. SSE stream — orden.confirmada received for this order", async () => {
-    await waitForSseEvent(
-      SSE_URL,
-      sseEventWith("orden.confirmada", "ordenId", ordenId),
-      30_000
-    );
+    await waitForSseEvent(SSE_URL, sseEventWith("orden.confirmada", "ordenId", ordenId), 30_000);
 
     // Confirm the REST state is also updated
     const res = await api.get(`/api/v1/ordenes/${ordenId}`).expect(200);
@@ -187,9 +206,7 @@ describe("ERP — full order flow", () => {
 
   // ── Step 5: Stock decreased ────────────────────────────────────────────────
   test("5. GET /api/v1/stock/:productoId — stock decremented by order cantidad", async () => {
-    const res = await api
-      .get(`/api/v1/stock/${productoId}`)
-      .expect(200);
+    const res = await api.get(`/api/v1/stock/${productoId}`).expect(200);
 
     const { disponible, reservado } = res.body.data as { disponible: number; reservado: number };
     // After confirmation the order consumed the stock; total must reflect it
@@ -202,10 +219,7 @@ describe("ERP — full order flow", () => {
     // Give svc-obs a moment to process events from its queue
     await new Promise((r) => setTimeout(r, 1_000));
 
-    const res = await api
-      .get("/api/v1/obs/events")
-      .query({ pageSize: 100 })
-      .expect(200);
+    const res = await api.get("/api/v1/obs/events").query({ pageSize: 100 }).expect(200);
 
     const eventNames: string[] = res.body.data.map((e: { eventName: string }) => e.eventName);
 
@@ -242,11 +256,7 @@ describe("ERP — insufficient stock flow", () => {
 
   // Wait for orden.cancelada on the SSE stream instead of polling REST.
   test("3. SSE stream — orden.cancelada received for this order", async () => {
-    await waitForSseEvent(
-      SSE_URL,
-      sseEventWith("orden.cancelada", "ordenId", ordenId),
-      30_000
-    );
+    await waitForSseEvent(SSE_URL, sseEventWith("orden.cancelada", "ordenId", ordenId), 30_000);
 
     const res = await api.get(`/api/v1/ordenes/${ordenId}`).expect(200);
     expect(res.body.data.estado).toBe("cancelada");

@@ -45,9 +45,7 @@ export function StockAlerts({ apiBase, refreshTick }: Props) {
     <section style={styles.section}>
       <div style={styles.header}>
         <h2 style={styles.title}>
-          {active.length > 0 && (
-            <span style={styles.alertDot}>⚠</span>
-          )}
+          {active.length > 0 && <span style={styles.alertDot}>⚠</span>}
           Alertas de Stock
         </h2>
         <span style={styles.count}>
@@ -70,7 +68,9 @@ export function StockAlerts({ apiBase, refreshTick }: Props) {
                 </span>
               </div>
               <div style={styles.alertMeta}>
-                <code style={{ fontSize: 10, color: "#6e7681" }}>{(a.productoId || "").slice(0, 13)}…</code>
+                <code style={{ fontSize: 10, color: "#6e7681" }}>
+                  {(a.productoId || "").slice(0, 13)}…
+                </code>
                 <span style={{ fontSize: 10, color: "#6e7681" }}>
                   {new Date(a.creadaEn).toLocaleTimeString()}
                 </span>
@@ -110,7 +110,14 @@ const styles: Record<string, React.CSSProperties> = {
   title: { fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 },
   alertDot: { color: "#ffa657" },
   count: { marginLeft: "auto", fontSize: 11, color: "#6e7681" },
-  body: { padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 280, overflowY: "auto" },
+  body: {
+    padding: 12,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    maxHeight: 280,
+    overflowY: "auto",
+  },
   alertCard: {
     background: "rgba(255,166,87,0.08)",
     border: "1px solid rgba(255,166,87,0.3)",

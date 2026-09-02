@@ -18,10 +18,7 @@ const TRANSICIONES_VALIDAS: Record<EstadoOrden, readonly EstadoOrden[]> = {
   cancelada: [],
 } as const;
 
-export function puedeTransicionar(
-  actual: EstadoOrden,
-  siguiente: EstadoOrden
-): boolean {
+export function puedeTransicionar(actual: EstadoOrden, siguiente: EstadoOrden): boolean {
   return (TRANSICIONES_VALIDAS[actual] as readonly string[]).includes(siguiente);
 }
 

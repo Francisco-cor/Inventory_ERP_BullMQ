@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "@erp/svc-productos",
   "version": "1.0.0",
   "private": true,
@@ -11,16 +11,18 @@
     "migrate": "node-pg-migrate -d $DATABASE_URL -m migrations up",
     "type-check": "tsc -b",
     "lint": "eslint src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "tsx src/seed.ts"
   },
   "dependencies": {
-    "@erp/shared-types": "*",
+    "@erp/env": "*",
     "@erp/event-bus": "*",
-    "bullmq": "^5.0.0",
-    "fastify": "^5.0.0",
+    "@erp/shared-types": "*",
     "@fastify/rate-limit": "^10.1.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
+    "bullmq": "^5.0.0",
+    "fastify": "^5.0.0",
     "pg": "^8.13.0",
     "uuid": "^11.0.0",
     "zod": "^3.24.0"

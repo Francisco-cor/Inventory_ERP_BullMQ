@@ -31,6 +31,7 @@ svc-stock    →  orden.cancelada     →  svc-stock      (→ libera reservas)
 ```
 
 La infraestructura técnica es `packages/event-bus`, un wrapper compartido sobre BullMQ que:
+
 - Expone `publish(eventName, payload)` y `subscribe(eventName, handler)`.
 - Usa **colas por servicio** (`events:svc-ordenes`, `events:svc-stock`, `events:svc-productos`) para fan-out real — cada servicio consume únicamente su propia cola.
 - Configura **3 reintentos con backoff exponencial** antes de marcar un job como fallido.

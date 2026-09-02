@@ -6,3 +6,9 @@ dist/
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+# Planes internos / roadmaps no versionados
+PLAN_IMPLEMENTACION.md
+ROADMAP.md
+.plan/
+.roadmap/

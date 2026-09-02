@@ -2,17 +2,17 @@ import React, { useEffect, useRef, useState } from "react";
 import type { EventEntry } from "../types.js";
 
 const EVENT_COLORS: Record<string, string> = {
-  "orden.creada":      "#58a6ff",
-  "orden.confirmada":  "#3fb950",
-  "orden.cancelada":   "#f85149",
-  "stock.reservado":   "#d2a8ff",
-  "stock.insuficiente":"#ffa657",
-  "stock.liberado":    "#79c0ff",
-  "stock.alerta":      "#ffa657",
-  "stock.ajustado":    "#a5d6ff",
-  "producto.creado":   "#7ee787",
-  "producto.actualizado":"#e3b341",
-  "producto.eliminado":"#f85149",
+  "orden.creada": "#58a6ff",
+  "orden.confirmada": "#3fb950",
+  "orden.cancelada": "#f85149",
+  "stock.reservado": "#d2a8ff",
+  "stock.insuficiente": "#ffa657",
+  "stock.liberado": "#79c0ff",
+  "stock.alerta": "#ffa657",
+  "stock.ajustado": "#a5d6ff",
+  "producto.creado": "#7ee787",
+  "producto.actualizado": "#e3b341",
+  "producto.eliminado": "#f85149",
 };
 
 const MAX_EVENTS = 200;
@@ -74,7 +74,7 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
 
     return () => {
       active = false;
-      reconnectTimer && clearTimeout(reconnectTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       es?.close();
     };
   }, [sseUrl, onSlaWarning]);
@@ -117,14 +117,10 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
           autoScroll.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
         }}
       >
-        {filtered.length === 0 && (
-          <p style={styles.empty}>Esperando eventos…</p>
-        )}
+        {filtered.length === 0 && <p style={styles.empty}>Esperando eventos…</p>}
         {filtered.map((ev) => (
           <div key={ev.eventId} style={styles.eventRow}>
-            <span style={styles.timestamp}>
-              {new Date(ev.timestamp).toLocaleTimeString()}
-            </span>
+            <span style={styles.timestamp}>{new Date(ev.timestamp).toLocaleTimeString()}</span>
             <span
               style={{
                 ...styles.eventName,
@@ -134,12 +130,8 @@ export function EventLog({ sseUrl, onSlaWarning }: Props) {
               {ev.eventName}
             </span>
             <span style={styles.source}>{ev.source}</span>
-            <span style={styles.correlationId}>
-              {ev.correlationId?.slice(0, 8) || 'no-id'}
-            </span>
-            <span style={styles.payload}>
-              {(JSON.stringify(ev.payload) || "").slice(0, 80)}
-            </span>
+            <span style={styles.correlationId}>{ev.correlationId?.slice(0, 8) || "no-id"}</span>
+            <span style={styles.payload}>{(JSON.stringify(ev.payload) || "").slice(0, 80)}</span>
           </div>
         ))}
         <div ref={bottomRef} />
@@ -204,8 +196,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   timestamp: { color: "#6e7681" },
   eventName: { fontWeight: 600 },
-  source:    { color: "#8b949e" },
+  source: { color: "#8b949e" },
   correlationId: { color: "#6e7681", fontFamily: "monospace" },
   payload: { color: "#8b949e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  empty:   { color: "#6e7681", textAlign: "center", padding: 32, fontSize: 13 },
+  empty: { color: "#6e7681", textAlign: "center", padding: 32, fontSize: 13 },
 };

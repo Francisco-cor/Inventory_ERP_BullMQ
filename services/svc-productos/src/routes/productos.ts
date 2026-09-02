@@ -2,10 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
-import {
-  CrearProductoSchema,
-  ActualizarProductoSchema,
-} from "../domain/producto.schema.js";
+import { CrearProductoSchema, ActualizarProductoSchema } from "../domain/producto.schema.js";
 import { requireApiKey } from "../plugins/auth.js";
 
 export async function productosRoutes(app: FastifyInstance) {
@@ -73,10 +70,7 @@ export async function productosRoutes(app: FastifyInstance) {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
-      const { rows } = await pool.query(
-        "SELECT * FROM productos WHERE id = $1",
-        [id]
-      );
+      const { rows } = await pool.query("SELECT * FROM productos WHERE id = $1", [id]);
 
       if (rows.length === 0) {
         return reply.status(404).send({

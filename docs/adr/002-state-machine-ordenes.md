@@ -41,11 +41,13 @@ La validación a nivel DB (ENUM de PostgreSQL + WHERE `estado = 'pendiente'`) si
 ## Consecuencias
 
 **Positivas:**
+
 - Las reglas de negocio están en el código, no dispersas en múltiples WHERE clauses SQL
-- Los mensajes de error son descriptivos: *"Orden en estado 'confirmada' es terminal y no permite más transiciones"*
+- Los mensajes de error son descriptivos: _"Orden en estado 'confirmada' es terminal y no permite más transiciones"_
 - Agregar un estado nuevo (e.g. `en_preparacion`) requiere un solo cambio en la tabla de transiciones
 - TypeScript garantiza en compilación que no se use un string arbitrario como estado
 
 **Negativas / Trade-offs:**
+
 - Dos capas de validación (TypeScript + SQL) que deben mantenerse en sincronía
 - La validación en código no es atómica: entre el SELECT del estado y el UPDATE puede ocurrir un cambio concurrente. Por eso el UPDATE incluye `WHERE estado = $estadoActual` como guard atómico de segunda línea

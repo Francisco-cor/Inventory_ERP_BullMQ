@@ -20,7 +20,11 @@ export async function alertasRoutes(app: FastifyInstance) {
       },
     },
     async (req) => {
-      const { resuelta = false, page = 1, pageSize = 20 } = req.query as {
+      const {
+        resuelta = false,
+        page = 1,
+        pageSize = 20,
+      } = req.query as {
         resuelta?: boolean;
         page?: number;
         pageSize?: number;

@@ -55,7 +55,9 @@ export async function healthRoutes(app: FastifyInstance) {
       }
 
       const healthy = dbStatus === "ok" && redisStatus === "ok";
-      console.log(`[health] svc-productos status: ${healthy ? "ok" : "degraded"} (db:${dbStatus}, redis:${redisStatus})`);
+      console.log(
+        `[health] svc-productos status: ${healthy ? "ok" : "degraded"} (db:${dbStatus}, redis:${redisStatus})`
+      );
       if (!healthy) reply.status(503);
 
       return {

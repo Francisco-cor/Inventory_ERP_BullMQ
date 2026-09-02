@@ -75,4 +75,4 @@ Patrón que garantiza acoplamiento oculto. Cuando un desarrollador puede escribi
 
 - [Database per Service Pattern — microservices.io](https://microservices.io/patterns/data/database-per-service.html)
 - [Saga Pattern — Chris Richardson](https://microservices.io/patterns/data/saga.html)
-- Vernon, V. (2013). *Implementing Domain-Driven Design*. Capítulo 4: Architecture.
+- Vernon, V. (2013). _Implementing Domain-Driven Design_. Capítulo 4: Architecture.

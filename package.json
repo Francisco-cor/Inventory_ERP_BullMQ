@@ -2,6 +2,7 @@
   "name": "inventory-erp",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "ERP de inventario con event sourcing y observabilidad real",
   "workspaces": [
     "packages/*",
@@ -10,20 +11,43 @@
   ],
   "scripts": {
     "dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "dev:watch": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build --watch",
     "up": "docker compose up --build -d",
     "down": "docker compose down -v",
     "logs": "docker compose logs -f",
     "migrate": "npm run migrate --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspaces --if-present",
+    "prepare": "husky"
   },
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@eslint/js": "^9.15.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.15.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

@@ -18,10 +18,10 @@ export interface DomainEvent<T = unknown> {
   id: string;
   name: EventName;
   payload: T;
-  timestamp: string;      // ISO 8601
+  timestamp: string; // ISO 8601
   source: ServiceName;
   correlationId: string;
-  schemaVersion: string;  // e.g. "1.0"
+  schemaVersion: string; // e.g. "1.0"
 }
 
 export type ServiceName = "svc-productos" | "svc-ordenes" | "svc-stock" | "svc-obs";
