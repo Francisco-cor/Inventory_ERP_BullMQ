@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from "bullmq";
 import { randomUUID } from "node:crypto";
 import type { DomainEvent, EventName, ServiceName } from "@erp/shared-types";
 import { validateEventPayload } from "./schemas.js";
+import { createLogger } from "@erp/logger";
 
 export interface RedisConfig {
   host: string;
@@ -116,6 +117,7 @@ const JOB_OPTIONS = {
 export function createEventBus(config: EventBusConfig) {
   const { serviceName, redis } = config;
   const connection = { host: redis.host, port: redis.port };
+  const logger = createLogger({ service: serviceName });
 
   // One publish queue per service for fan-out — dynamic via EVENT_BUS_SERVICES
   const initialServices = getAllServices();
@@ -144,15 +146,9 @@ export function createEventBus(config: EventBusConfig) {
         // Schema version negotiation — skip unknown versions (permanent, no retry)
         if (event.schemaVersion !== CURRENT_SCHEMA_VERSION) {
           metrics.skippedVersion += 1;
-          console.warn(
-            JSON.stringify({
-              level: "warn",
-              service: serviceName,
-              eventId: event.id,
-              eventName: event.name,
-              schemaVersion: event.schemaVersion,
-              msg: "unknown schemaVersion — skipping",
-            })
+          logger.warn(
+            { eventId: event.id, eventName: event.name, schemaVersion: event.schemaVersion },
+            "unknown schemaVersion — skipping"
           );
           return;
         }
@@ -162,17 +158,11 @@ export function createEventBus(config: EventBusConfig) {
         } catch (err) {
           metrics.failed += 1;
           const msg = err instanceof Error ? err.message : String(err);
-          console.error(
-            JSON.stringify({
-              level: "error",
-              service: serviceName,
-              eventId: event.id,
-              eventName: event.name,
-              error: msg,
-              msg: "payload validation failed — permanent",
-            })
+          logger.error(
+            { eventId: event.id, eventName: event.name, error: msg },
+            "payload validation failed — permanent"
           );
-          throw err; // will be classified as permanent and go to DLQ without retry flood
+          throw err;
         }
         metrics.consumed += 1;
         const eventHandlers = handlers.get(event.name) ?? [];
@@ -185,39 +175,17 @@ export function createEventBus(config: EventBusConfig) {
 
     worker.on("failed", (job, err) => {
       metrics.failed += 1;
-      console.error(
-        JSON.stringify({
-          level: "error",
-          service: serviceName,
-          jobId: job?.id,
-          eventName: job?.name,
-          attempts: job?.attemptsMade,
-          error: err.message,
-          msg: "job failed",
-        })
+      logger.error(
+        { jobId: job?.id, eventName: job?.name, attempts: job?.attemptsMade, error: err.message },
+        "job failed"
       );
     });
 
     worker.on("completed", (job) => {
-      console.log(
-        JSON.stringify({
-          level: "info",
-          service: serviceName,
-          jobId: job.id,
-          eventName: job.name,
-          msg: "job completed",
-        })
-      );
+      logger.info({ jobId: job.id, eventName: job.name }, "job completed");
     });
 
-    console.log(
-      JSON.stringify({
-        level: "info",
-        service: serviceName,
-        queue: queueName(serviceName),
-        msg: "worker started",
-      })
-    );
+    logger.info({ queue: queueName(serviceName) }, "worker started");
   }
 
   async function publish<T>(name: EventName, payload: T, correlationId?: string): Promise<string> {
@@ -247,15 +215,9 @@ export function createEventBus(config: EventBusConfig) {
     );
 
     metrics.published += 1;
-    console.log(
-      JSON.stringify({
-        level: "info",
-        service: serviceName,
-        eventId: event.id,
-        eventName: name,
-        correlationId: event.correlationId,
-        msg: "event published",
-      })
+    logger.info(
+      { eventId: event.id, eventName: name, correlationId: event.correlationId },
+      "event published"
     );
 
     return event.id;

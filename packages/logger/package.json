@@ -1,5 +1,5 @@
 {
-  "name": "@erp/event-bus",
+  "name": "@erp/logger",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -16,12 +16,11 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
-    "@erp/logger": "*",
-    "@erp/shared-types": "*",
-    "bullmq": "^5.0.0",
-    "zod": "^3.24.0"
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   }
 }

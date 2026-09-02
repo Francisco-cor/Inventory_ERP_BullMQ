@@ -93,7 +93,7 @@ Scalable microservices architecture focused on high availability and end-to-end 
 - **Backend**: Node.js, TypeScript, Fastify (High-performance framework).
 - **Messaging / Events**: BullMQ, Redis (Pattern: **Saga Choreography**).
 - **Persistence**: PostgreSQL (**Polyglot Persistence** / DB-per-service).
-- **Observability**: Server-Sent Events (**SSE**), React 18 (Real-time Dashboard).
+- **Observability**: Prometheus + Grafana + Loki + Tempo + OTEL, SSE, React 18 (Real-time Dashboard).
 - **Infrastructure**: Nginx (Reverse Proxy), Docker & Docker Compose.
 - **Testing**: Jest, Supertest (**E2E Testing**).
 
@@ -154,6 +154,10 @@ GET    /api/v1/obs/sla/alerts             → orders with SLA risks
 
 GET    /admin/orders/dlq                  → svc-orders dead-letter queue
 GET    /admin/stock/dlq                   → svc-stock dead-letter queue
+
+GET    /metrics                           → Prometheus metrics (per service, no auth)
+GET    /health                            → aggregated health (nginx → svc-obs /health/aggregate)
+GET    /health/ready                      → readiness (K8s)
 ```
 
 ---
@@ -228,10 +232,19 @@ This starts: 4 Postgres instances, Redis, 4 Node.js services, nginx, and the Rea
 
 ```bash
 # Verify health
+curl http://localhost/health                # agregado (svc-obs fan-out)
 curl http://localhost/health/products
 curl http://localhost/health/orders
 curl http://localhost/health/stock
 curl http://localhost/health/obs
+curl http://localhost:3001/metrics | head -20  # Prometheus
+
+# Observabilidad (Fase 6)
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+open http://localhost:9090   # Prometheus
+open http://localhost:3005   # Grafana (admin/admin) — dashboards ERP Overview + Event Bus
+open http://localhost:3100/ready  # Loki
+open http://localhost:3200/status # Tempo
 
 # View the dashboard
 open http://localhost:3000
@@ -303,4 +316,8 @@ See `.github/workflows/ci.yml`.
 - [ADR #004](docs/adr/004-tooling-dx.md) — Tooling y DX unificados (Fase 1)
 - [ADR #005](docs/adr/005-seguridad-por-capas.md) — Seguridad por capas (Fase 2)
 - [ADR #006](docs/adr/006-outbox-pattern.md) — Outbox transaccional y relay (Fase 3)
+- [ADR #007](docs/adr/007-retencion-datos.md) — Retención y migraciones (Fase 4)
+- [ADR #008](docs/adr/008-resiliencia-escalabilidad.md) — Resiliencia y escalabilidad (Fase 5)
+- [ADR #009](docs/adr/009-observabilidad.md) — Observabilidad (Fase 6)
+- [SLOs](docs/slo.md) — SLOs y dashboards
 - [Threat Model](docs/threat-model.md) — STRIDE y flujos críticos

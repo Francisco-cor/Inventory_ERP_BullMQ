@@ -1,8 +1,9 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
+import { randomUUID } from "node:crypto";
 import { registerSecurity } from "@erp/auth";
-import { pool, waitForDatabase } from "./db/pool.js";
+import { pool, waitForDatabase, getPoolMetrics } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { productosRoutes } from "./routes/productos.js";
 import { healthRoutes } from "./routes/health.js";
@@ -11,22 +12,25 @@ import { registerSwagger } from "./routes/swagger.js";
 import { eventBus } from "./events/bus.js";
 import { startOutboxRelay, stopOutboxRelay } from "./jobs/outbox-relay.js";
 import { startRetentionJob, stopRetentionJob } from "./jobs/retention.js";
+import { createLogger, correlationStore } from "@erp/logger";
+import {
+  createMetrics,
+  registerHttpMetrics,
+  createMetricsHandler,
+  startMetricsUpdater,
+} from "@erp/metrics";
+import { initTracing, shutdownTracing } from "@erp/tracing";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
-const app = Fastify({
-  logger: {
-    level: process.env.LOG_LEVEL ?? "info",
-    transport:
-      process.env.NODE_ENV === "production"
-        ? undefined
-        : { target: "pino-pretty", options: { colorize: true } },
-  },
-});
+const logger = createLogger({ service: "svc-productos" });
+const metrics = createMetrics("svc-productos");
+const app = Fastify({ logger });
+let metricsUpdater: NodeJS.Timeout | null = null;
 
 async function bootstrap() {
-  // 1. Wait for DB and run migrations
+  await initTracing("svc-productos");
   await waitForDatabase();
 
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -37,10 +41,27 @@ async function bootstrap() {
     await client.end();
   }
 
-  // 2. Security (helmet + cors) — must be first
+  app.addHook("onRequest", async (request, reply) => {
+    const headers = request.headers as Record<string, string>;
+    const correlationId =
+      (headers["x-correlation-id"] as string) ?? (headers["x-request-id"] as string);
+    const requestId = (headers["x-request-id"] as string) ?? correlationId;
+    const ctx = {
+      correlationId: correlationId ?? randomUUID(),
+      requestId: requestId ?? correlationId ?? randomUUID(),
+    };
+    (correlationStore as any).enterWith?.(ctx);
+    (request as any).correlationId = ctx.correlationId;
+    (request as any).requestId = ctx.requestId;
+    reply.header("X-Correlation-Id", ctx.correlationId);
+    reply.header("X-Request-Id", ctx.requestId);
+  });
+
+  registerHttpMetrics(app, "svc-productos", metrics);
+  app.get("/metrics", createMetricsHandler(metrics));
+
   await registerSecurity(app);
 
-  // 3. Rate limiting
   await app.register(rateLimit, {
     global: true,
     max: 200,
@@ -53,7 +74,6 @@ async function bootstrap() {
     }),
   });
 
-  // 4. Centralized error handler
   app.setErrorHandler((err, _req, reply) => {
     const e = err as { validation?: unknown; message?: string };
     if (e.validation) {
@@ -73,17 +93,12 @@ async function bootstrap() {
     });
   });
 
-  // 5. Register OpenAPI / Swagger
   await registerSwagger(app);
-
-  // 6. Register routes
   await app.register(healthRoutes);
   await app.register(productosRoutes, { prefix: "/api/v1/productos" });
-  // Alias en inglés para compatibilidad README/docs — mismo handler, distinto prefix
   await app.register(productosRoutes, { prefix: "/api/v1/products" });
   await app.register(adminRoutes, { prefix: "/admin" });
 
-  // 6b. Bull Board (admin queues) — /admin/queues
   try {
     const { createBullBoard } = await import("@bull-board/api");
     const { BullMQAdapter } = await import("@bull-board/api/bullMQAdapter");
@@ -104,18 +119,41 @@ async function bootstrap() {
     app.log.warn({ err: e }, "Bull Board not available");
   }
 
-  // 6c. Outbox relay + retention
   startOutboxRelay();
   startRetentionJob();
 
-  // 7. Start server
+  metricsUpdater = startMetricsUpdater(metrics, "svc-productos", {
+    getPoolMetrics,
+    getOutboxPending: async () => {
+      try {
+        const { rows } = await pool.query(
+          "SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL"
+        );
+        return rows[0].pending as number;
+      } catch {
+        return 0;
+      }
+    },
+    getOutboxLag: async () => {
+      try {
+        const { rows } = await pool.query(
+          "SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::int AS lag FROM outbox WHERE published_at IS NULL"
+        );
+        return (rows[0].lag as number) ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+  });
+
   await app.listen({ port: PORT, host: HOST });
   app.log.info(`svc-productos listening on http://${HOST}:${PORT}`);
   app.log.info(`Swagger UI: http://${HOST}:${PORT}/docs`);
+  app.log.info(`Metrics: http://${HOST}:${PORT}/metrics`);
 }
 
 bootstrap().catch((err) => {
-  console.error("[fatal] Failed to start svc-productos:", err);
+  logger.error({ err }, "[fatal] Failed to start svc-productos");
   process.exit(1);
 });
 
@@ -124,20 +162,21 @@ export let isShuttingDown = false;
 async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[shutdown] ${signal} received — draining (10s timeout)`);
+  logger.info(`[shutdown] ${signal} received — draining (10s timeout)`);
   const timeout = setTimeout(() => {
-    console.error("[shutdown] forced exit after 10s");
+    logger.error("[shutdown] forced exit after 10s");
     process.exit(1);
   }, 10_000);
   timeout.unref?.();
 
   try {
-    await stopOutboxRelay().catch((e) => console.error("[shutdown] stopOutboxRelay", e));
-    await stopRetentionJob().catch((e) => console.error("[shutdown] stopRetentionJob", e));
+    if (metricsUpdater) clearInterval(metricsUpdater);
+    await stopOutboxRelay().catch((e) => logger.error({ err: e }, "[shutdown] stopOutboxRelay"));
+    await stopRetentionJob().catch((e) => logger.error({ err: e }, "[shutdown] stopRetentionJob"));
     try {
       await app.close();
     } catch (e) {
-      console.error("[shutdown] app.close", e);
+      logger.error({ err: e }, "[shutdown] app.close");
     }
     try {
       const server = app.server as unknown as {
@@ -149,13 +188,14 @@ async function gracefulShutdown(signal: string): Promise<void> {
     } catch {
       void 0;
     }
-    await eventBus.close().catch((e) => console.error("[shutdown] eventBus.close", e));
-    await pool.end().catch((e) => console.error("[shutdown] pool.end", e));
-    console.log("[shutdown] graceful exit");
+    await eventBus.close().catch((e) => logger.error({ err: e }, "[shutdown] eventBus.close"));
+    await shutdownTracing().catch((e) => logger.error({ err: e }, "[shutdown] tracing"));
+    await pool.end().catch((e) => logger.error({ err: e }, "[shutdown] pool.end"));
+    logger.info("[shutdown] graceful exit");
     clearTimeout(timeout);
     process.exit(0);
   } catch (e) {
-    console.error("[shutdown] failed", e);
+    logger.error({ err: e }, "[shutdown] failed");
     clearTimeout(timeout);
     process.exit(1);
   }

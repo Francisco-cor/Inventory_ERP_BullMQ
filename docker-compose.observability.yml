@@ -1,0 +1,147 @@
+name: inventory-erp-obs
+
+# Stack de observabilidad — Fase 6
+# Uso: docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#      docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile observability up -d
+# Requiere que los servicios expongan /metrics (prom-client) y OTLP (otel-collector)
+
+networks:
+  erp-internal:
+    external: true
+    name: inventory-erp_erp-internal
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+
+services:
+  # ── Prometheus ───────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --web.enable-lifecycle
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - erp-internal
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Grafana ──────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_FEATURE_TOGGLES_ENABLE: publicDashboards
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3005:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - erp-internal
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Loki (logs) ──────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - erp-internal
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Tempo (traces) ───────────────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.4.0
+    container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200" # Tempo HTTP
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    networks:
+      - erp-internal
+    restart: unless-stopped
+
+  # ── OTEL Collector ───────────────────────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector.yml"]
+    volumes:
+      - ./observability/otel-collector/otel-collector.yml:/etc/otel-collector.yml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC (also tempo, but collector forwards)
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus metrics (collector self)
+      - "8888:8888" # pprof
+    depends_on:
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_healthy
+    networks:
+      - erp-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Promtail (opcional, para enviar logs de Docker a Loki) ──────────────
+  # promtail:
+  #   image: grafana/promtail:2.9.8
+  #   volumes:
+  #     - ./observability/promtail/promtail.yml:/etc/promtail/config.yml:ro
+  #     - /var/log:/var/log:ro
+  #   command: -config.file=/etc/promtail/config.yml
+  #   networks:
+  #     - erp-internal

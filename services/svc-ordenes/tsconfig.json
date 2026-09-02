@@ -9,7 +9,10 @@
       "@erp/env": ["../../packages/env/src/index.ts"],
       "@erp/auth": ["../../packages/auth/src/index.ts"],
       "@erp/db-migrate": ["../../packages/db-migrate/src/index.ts"],
-      "@erp/resilience": ["../../packages/resilience/src/index.ts"]
+      "@erp/resilience": ["../../packages/resilience/src/index.ts"],
+      "@erp/logger": ["../../packages/logger/src/index.ts"],
+      "@erp/metrics": ["../../packages/metrics/src/index.ts"],
+      "@erp/tracing": ["../../packages/tracing/src/index.ts"]
     }
   },
   "include": ["src"],
@@ -31,6 +34,15 @@
     },
     {
       "path": "../../packages/resilience"
+    },
+    {
+      "path": "../../packages/logger"
+    },
+    {
+      "path": "../../packages/metrics"
+    },
+    {
+      "path": "../../packages/tracing"
     }
   ]
 }

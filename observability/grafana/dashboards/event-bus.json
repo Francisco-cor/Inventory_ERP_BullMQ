@@ -1,0 +1,109 @@
+{
+  "uid": "event-bus",
+  "title": "ERP — Event Bus",
+  "tags": ["erp", "event-bus"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Events Published / Consumed / Failed (rate)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(events_published_total[1m])) by (service)",
+          "legendFormat": "published {{service}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(events_consumed_total[1m])) by (service)",
+          "legendFormat": "consumed {{service}}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(events_failed_total[1m])) by (service)",
+          "legendFormat": "failed {{service}}",
+          "refId": "C"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "title": "Events by Type (published)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(events_published_total[1m])) by (event_name)",
+          "legendFormat": "{{event_name}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 3,
+      "title": "DLQ Failed Jobs (total)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum(events_failed_total)", "refId": "A" }],
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 }
+    },
+    {
+      "id": 4,
+      "title": "Outbox Lag (p95)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "outbox_lag_seconds", "legendFormat": "{{service}}", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 }
+    },
+    {
+      "id": 5,
+      "title": "BullMQ Queue Depth (via outbox_pending)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "outbox_pending", "legendFormat": "{{service}}", "refId": "A" }],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+    },
+    {
+      "id": 6,
+      "title": "Traces (Tempo) — recent",
+      "type": "traces",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        { "query": "{service.name=\"svc-ordenes\"} | {service.name=\"svc-stock\"}", "refId": "A" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+    },
+    {
+      "id": 7,
+      "title": "Logs (Loki) — event bus",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{service=~\"svc-.*\"} |= \"event\" | json | line_format \"{{.service}} {{.eventName}} correlation={{.correlationId}}\"",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+  resourcedetection:
+    detectors: [env, system]
+    system:
+      hostname_sources: [os]
+  attributes:
+    actions:
+      - key: service.name
+        action: upsert
+        value: ${SERVICE_NAME:-unknown}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+  logging:
+    loglevel: info
+
+connectors:
+  spanmetrics:
+    namespace: otel_span
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resourcedetection, attributes]
+      exporters: [otlp/tempo, spanmetrics, logging]
+    metrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888

@@ -4,7 +4,7 @@
 COMPOSE_BASE := docker compose
 COMPOSE_DEV  := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
-.PHONY: help dev dev-watch up down restart logs clean build type-check lint lint-fix format format-check test seed migrate ps chaos chaos-scale
+.PHONY: help dev dev-watch up down restart logs clean build type-check lint lint-fix format format-check test seed migrate ps chaos chaos-scale obs-up obs-down obs-logs
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -89,6 +89,16 @@ chaos-scale: ## Verifica escalado horizontal de svc-obs (2 réplicas + SSE fan-o
 	@echo "Abre 2 streams SSE y crea orden de prueba..."
 	@curl -s -X POST http://localhost/api/v1/ordenes -H "Content-Type: application/json" -d '{"lineas":[{"productoId":"11111111-1111-4111-8111-111111111001","sku":"SKU-SEED-001","cantidad":1,"precioUnitario":89.99}]}' | jq . || true
 	@echo "Verifica docker compose logs svc-obs | grep sse:broker"
+
+obs-up: ## Levanta stack de observabilidad (Prometheus, Grafana, Loki, Tempo)
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+	@echo "Prometheus: http://localhost:9090  Grafana: http://localhost:3005 (admin/admin)  Loki: http://localhost:3100"
+
+obs-down: ## Baja observabilidad
+	docker compose -f docker-compose.yml -f docker-compose.observability.yml down
+
+obs-logs: ## Logs de observabilidad
+	docker compose -f docker-compose.observability.yml logs -f
 
 clean: ## Limpia dist, coverage y tsbuildinfo
 	rm -rf packages/*/dist services/*/dist dashboard/dist

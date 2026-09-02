@@ -45,6 +45,12 @@ const BaseEnvSchema = z
     SLA_CHECK_INTERVAL_MS: z.coerce.number().int().min(1000).max(600000).default(30000),
     SSE_ADAPTER: z.enum(["memory", "redis"]).default("memory"),
     HEALTH_AGGREGATE_TIMEOUT_MS: z.coerce.number().int().min(500).max(10000).default(2000),
+
+    // Observabilidad (OTEL)
+    OTEL_ENABLED: z.string().optional(),
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: z.string().optional(),
+    OTEL_DIAG: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === "production" && !data.ADMIN_API_KEY) {

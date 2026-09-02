@@ -32,7 +32,10 @@
     "pg": "^8.13.0",
     "uuid": "^11.0.0",
     "zod": "^3.24.0",
-    "@erp/resilience": "*"
+    "@erp/resilience": "*",
+    "@erp/logger": "*",
+    "@erp/metrics": "*",
+    "@erp/tracing": "*"
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",

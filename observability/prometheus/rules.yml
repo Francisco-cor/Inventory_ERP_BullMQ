@@ -1,0 +1,64 @@
+groups:
+  - name: erp.rules
+    interval: 30s
+    rules:
+      - alert: HighDLQGrowth
+        expr: increase(events_failed_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "DLQ crece en {{ $labels.service }} ({{ $value }} fallos/5m)"
+          description: "Revisar /admin/dlq y Bull Board en {{ $labels.service }}. Posible error permanente (validación) o Redis caído."
+          runbook_url: "https://github.com/Francisco-cor/Inventory_ERP_BullMQ/blob/main/docs/runbook.md#2-dead-letter-queue-dlq"
+
+      - alert: SLABreach
+        expr: increase(sla_warnings_total[5m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SLA breach: {{ $value }} warnings en 5m"
+          description: "Órdenes pendientes >60s. Revisar svc-obs SLA checker y latencia de BullMQ. Ver /api/v1/obs/sla/alerts"
+          runbook_url: "https://github.com/Francisco-cor/Inventory_ERP_BullMQ/blob/main/docs/runbook.md#4-sla-checker"
+
+      - alert: OutboxLag
+        expr: outbox_pending > 100 or outbox_lag_seconds > 30
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox lag en {{ $labels.service }}: pending={{ $value }}"
+          description: "Relay no publica (<500ms esperado). Revisar Redis y logs outbox-relay. Métrica outbox_lag_seconds >30s."
+          runbook_url: "https://github.com/Francisco-cor/Inventory_ERP_BullMQ/blob/main/docs/adr/006-outbox-pattern.md"
+
+      - alert: HighHttpErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (service) / sum(rate(http_requests_total[5m])) by (service) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate >5% en {{ $labels.service }}"
+          description: "Revisar logs JSON (correlationId) y traces. Posible DB o validación."
+
+      - alert: HighLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency >500ms en {{ $labels.service }}"
+          description: "Revisar DB statement_timeout y outbox. SLO: p95 <500ms, p95 order_confirmation <2s"
+
+      - alert: SSECientsDrop
+        expr: sse_clients < 1
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Sin clientes SSE en {{ $labels.service }}"
+          description: "Dashboard no conectado. Verificar nginx proxy_buffering off y SSE adapter."
+
+      # Webhook stub: en prod, Alertmanager envía a svc-notificaciones (no implementado en Fase 6, solo alerta en Prometheus UI)
+      # alertmanager.yml: route -> receiver webhook -> POST http://svc-notificaciones:3006/api/v1/alerts

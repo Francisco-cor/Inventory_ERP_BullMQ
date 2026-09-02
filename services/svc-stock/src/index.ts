@@ -1,8 +1,9 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
+import { randomUUID } from "node:crypto";
 import { registerSecurity } from "@erp/auth";
-import { pool, waitForDatabase } from "./db/pool.js";
+import { pool, waitForDatabase, getPoolMetrics } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { stockRoutes } from "./routes/stock.js";
 import { alertasRoutes } from "./routes/alertas.js";
@@ -13,21 +14,25 @@ import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
 import { startOutboxRelay, stopOutboxRelay } from "./jobs/outbox-relay.js";
 import { startRetentionJob, stopRetentionJob } from "./jobs/retention.js";
+import { createLogger, correlationStore } from "@erp/logger";
+import {
+  createMetrics,
+  registerHttpMetrics,
+  createMetricsHandler,
+  startMetricsUpdater,
+} from "@erp/metrics";
+import { initTracing, shutdownTracing } from "@erp/tracing";
 
 const PORT = Number(process.env.PORT ?? 3003);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
-const app = Fastify({
-  logger: {
-    level: process.env.LOG_LEVEL ?? "info",
-    transport:
-      process.env.NODE_ENV === "production"
-        ? undefined
-        : { target: "pino-pretty", options: { colorize: true } },
-  },
-});
+const logger = createLogger({ service: "svc-stock" });
+const metrics = createMetrics("svc-stock");
+const app = Fastify({ logger });
+let metricsUpdater: NodeJS.Timeout | null = null;
 
 async function bootstrap() {
+  await initTracing("svc-stock");
   await waitForDatabase();
 
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -37,6 +42,25 @@ async function bootstrap() {
   } finally {
     await client.end();
   }
+
+  app.addHook("onRequest", async (request, reply) => {
+    const headers = request.headers as Record<string, string>;
+    const correlationId =
+      (headers["x-correlation-id"] as string) ?? (headers["x-request-id"] as string);
+    const requestId = (headers["x-request-id"] as string) ?? correlationId;
+    const ctx = {
+      correlationId: correlationId ?? randomUUID(),
+      requestId: requestId ?? correlationId ?? randomUUID(),
+    };
+    (correlationStore as any).enterWith?.(ctx);
+    (request as any).correlationId = ctx.correlationId;
+    (request as any).requestId = ctx.requestId;
+    reply.header("X-Correlation-Id", ctx.correlationId);
+    reply.header("X-Request-Id", ctx.requestId);
+  });
+
+  registerHttpMetrics(app, "svc-stock", metrics);
+  app.get("/metrics", createMetricsHandler(metrics));
 
   await registerSecurity(app);
 
@@ -101,13 +125,38 @@ async function bootstrap() {
   startOutboxRelay();
   startRetentionJob();
 
+  metricsUpdater = startMetricsUpdater(metrics, "svc-stock", {
+    getPoolMetrics,
+    getOutboxPending: async () => {
+      try {
+        const { rows } = await pool.query(
+          "SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL"
+        );
+        return rows[0].pending as number;
+      } catch {
+        return 0;
+      }
+    },
+    getOutboxLag: async () => {
+      try {
+        const { rows } = await pool.query(
+          "SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::int AS lag FROM outbox WHERE published_at IS NULL"
+        );
+        return (rows[0].lag as number) ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+  });
+
   await app.listen({ port: PORT, host: HOST });
   app.log.info(`svc-stock listening on http://${HOST}:${PORT}`);
   app.log.info(`Swagger UI: http://${HOST}:${PORT}/docs`);
+  app.log.info(`Metrics: http://${HOST}:${PORT}/metrics`);
 }
 
 bootstrap().catch((err) => {
-  console.error("[fatal] Failed to start svc-stock:", err);
+  logger.error({ err }, "[fatal] Failed to start svc-stock");
   process.exit(1);
 });
 
@@ -116,20 +165,21 @@ export let isShuttingDown = false;
 async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[shutdown] ${signal} received — draining (10s timeout)`);
+  logger.info(`[shutdown] ${signal} received — draining (10s timeout)`);
   const timeout = setTimeout(() => {
-    console.error("[shutdown] forced exit after 10s");
+    logger.error("[shutdown] forced exit after 10s");
     process.exit(1);
   }, 10_000);
   timeout.unref?.();
 
   try {
-    await stopOutboxRelay().catch((e) => console.error("[shutdown] stopOutboxRelay", e));
-    await stopRetentionJob().catch((e) => console.error("[shutdown] stopRetentionJob", e));
+    if (metricsUpdater) clearInterval(metricsUpdater);
+    await stopOutboxRelay().catch((e) => logger.error({ err: e }, "[shutdown] stopOutboxRelay"));
+    await stopRetentionJob().catch((e) => logger.error({ err: e }, "[shutdown] stopRetentionJob"));
     try {
       await app.close();
     } catch (e) {
-      console.error("[shutdown] app.close", e);
+      logger.error({ err: e }, "[shutdown] app.close");
     }
     try {
       const server = app.server as unknown as {
@@ -141,13 +191,14 @@ async function gracefulShutdown(signal: string): Promise<void> {
     } catch {
       void 0;
     }
-    await eventBus.close().catch((e) => console.error("[shutdown] eventBus.close", e));
-    await pool.end().catch((e) => console.error("[shutdown] pool.end", e));
-    console.log("[shutdown] graceful exit");
+    await eventBus.close().catch((e) => logger.error({ err: e }, "[shutdown] eventBus.close"));
+    await shutdownTracing().catch((e) => logger.error({ err: e }, "[shutdown] tracing"));
+    await pool.end().catch((e) => logger.error({ err: e }, "[shutdown] pool.end"));
+    logger.info("[shutdown] graceful exit");
     clearTimeout(timeout);
     process.exit(0);
   } catch (e) {
-    console.error("[shutdown] failed", e);
+    logger.error({ err: e }, "[shutdown] failed");
     clearTimeout(timeout);
     process.exit(1);
   }

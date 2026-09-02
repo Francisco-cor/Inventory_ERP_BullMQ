@@ -18,6 +18,7 @@ Todos los comandos asumen que el stack está levantado con Docker Compose.
 9. [Escalado horizontal](#9-escalado-horizontal)
 10. [Graceful shutdown y circuit breaker](#10-graceful-shutdown-y-circuit-breaker)
 11. [Chaos y resiliencia](#11-chaos-y-resiliencia)
+12. [Observabilidad (metrics, traces, logs)](#12-observabilidad-metrics-traces-logs)
 
 ---
 
@@ -540,3 +541,108 @@ curl -s http://localhost/api/v1/obs/events?eventName=stock.reservado | jq '.data
 ```
 
 Ver `docs/adr/008-resiliencia-escalabilidad.md` y `.env.example:66` (`SSE_ADAPTER`, `HEALTH_AGGREGATE_TIMEOUT_MS`).
+
+---
+
+## 12. Observabilidad (metrics, traces, logs)
+
+### Stack
+
+```bash
+# Levantar observabilidad (requiere stack base ya levantado)
+make obs-up
+# o
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+
+# Verificar
+curl -s http://localhost:9090/-/healthy  # Prometheus
+curl -s http://localhost:3005/api/health | jq .  # Grafana
+curl -s http://localhost:3100/ready      # Loki
+curl -s http://localhost:3200/status     # Tempo
+curl -s http://localhost:4318/v1/traces -X POST -d '{}' -H "Content-Type: application/json" | head  # OTEL
+
+# Logs de servicios (JSON con correlationId)
+docker compose logs -f svc-obs | jq .
+docker compose -f docker-compose.observability.yml logs -f prometheus grafana
+```
+
+Servicios: `prometheus:9090`, `grafana:3005` (admin/admin), `loki:3100`, `tempo:3200`, `otel-collector:4317/4318`.
+
+### Métricas Prometheus
+
+Cada servicio expone `GET /metrics` (sin auth, para scraper). Prometheus scrapea cada 15s (`observability/prometheus/prometheus.yml`).
+
+```bash
+curl -s http://localhost:3001/metrics | grep http_requests_total
+curl -s http://localhost:3004/metrics | grep sse_clients
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+
+# Queries útiles (Prometheus)
+# p95 confirmación
+# histogram_quantile(0.95, sum(rate(order_confirmation_latency_seconds_bucket[5m])) by (le))
+# lag del bus
+# outbox_pending{service="svc-ordenes"}
+# outbox_lag_seconds
+```
+
+**Criterio Fase 6:** `order_confirmation_latency_seconds p95 <2s` y `event_bus_lag <1s`.
+
+### Logs JSON estructurados
+
+`packages/logger` (`pino` + `AsyncLocalStorage`): cada log incluye `level`, `service`, `correlationId`, `requestId`, `msg`, `time` ISO. En prod JSON puro, en dev `pino-pretty`.
+
+```bash
+# Ver logs con correlationId
+docker compose logs svc-obs | grep correlationId
+curl -s http://localhost:3001/metrics | head
+
+# Loki (si se envían logs vía Promtail o OTEL)
+curl -G -s "http://localhost:3100/loki/api/v1/query_range" --data-urlencode 'query={service="svc-obs"}' | jq .
+# Grafana Explore → Loki → {service="svc-obs"} |= "error" | json
+```
+
+### Traces OTEL
+
+`packages/tracing` (`@opentelemetry/sdk-node` + `auto-instrumentations` + `OTLPTraceExporter`) instrumenta `pg`, `redis`, `fastify`, `bullmq`. Activo solo si `OTEL_EXPORTER_OTLP_ENDPOINT` está seteado y `OTEL_ENABLED=true` (ver `.env.example`).
+
+```bash
+# Habilitar tracing (dev)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces OTEL_ENABLED=true docker compose up -d svc-obs
+
+# Ver traces
+# 1. Crear orden y capturar correlationId
+curl -i -X POST http://localhost/api/v1/ordenes -H "Content-Type: application/json" -d '{"lineas":[...]}' | grep -i correlation
+# 2. Grafana Explore → Tempo → buscar traceId = correlationId (propagado como baggage)
+# 3. Ver spans: POST /api/v1/ordenes → order.created → stock.reservado → order.confirmed
+open http://localhost:3005/explore
+```
+
+### Grafana dashboards
+
+- **ERP — Overview** (`observability/grafana/dashboards/erp-overview.json`, uid `erp-overview`): HTTP Rate/Error/Duration p95, Order p95 (<2s), Outbox Pending/Lag, SSE Clients, SLA Warnings, DB Pool, Logs.
+- **Event Bus** (`event-bus.json`, uid `event-bus`): Published/Consumed/Failed rate, by event_name, DLQ, lag <1s, queue depth, Tempo traces.
+
+```bash
+open http://localhost:3005  # admin/admin
+# Dashboards → ERP — Overview
+# Verificar: p95 <2s y lag <1s en carga 50 VUs (k6)
+```
+
+### Alertas
+
+`observability/prometheus/rules.yml` (6 reglas):
+
+- `HighDLQGrowth` (`increase(events_failed_total[5m])>5`)
+- `SLABreach` (`increase(sla_warnings_total[5m])>3`)
+- `OutboxLag` (`outbox_pending>100 or outbox_lag_seconds>30`)
+- `HighHttpErrorRate` (>5% 5xx)
+- `HighLatencyP95` (>500ms)
+- `SSECientsDrop` (<1)
+
+```bash
+open http://localhost:9090/alerts
+curl -s http://localhost:9090/api/v1/rules | jq .
+# En prod, Alertmanager → svc-notificaciones (stub Fase 10)
+```
+
+Ver `docs/slo.md` y `docs/adr/009-observabilidad.md` y `.env.example` (`OTEL_*`).

@@ -113,6 +113,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_ENABLED: "false"
     depends_on:
       postgres-productos:
         condition: service_healthy
@@ -157,6 +159,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_ENABLED: "false"
     depends_on:
       postgres-ordenes:
         condition: service_healthy
@@ -201,6 +205,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_ENABLED: "false"
       STOCK_ALERTA_UMBRAL: 10
     depends_on:
       postgres-stock:
@@ -268,6 +274,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_ENABLED: "false"
       SLA_THRESHOLD_SECONDS: 60
       SLA_CHECK_INTERVAL_MS: 30000
       SSE_ADAPTER: redis
