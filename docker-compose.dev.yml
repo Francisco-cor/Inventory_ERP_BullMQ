@@ -1,0 +1,198 @@
+name: inventory-erp-dev
+
+# Override para desarrollo local con hot-reload.
+# Uso: npm run dev  ->  docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# O directamente: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch (compose v2.22+)
+
+services:
+  # ── svc-productos (dev) ───────────────────────────────────────────────────
+  svc-productos:
+    build:
+      context: .
+      dockerfile: services/svc-productos/Dockerfile
+      target: deps
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./tsconfig.base.json:/app/tsconfig.base.json:ro
+      - ./packages/shared-types:/app/packages/shared-types
+      - ./packages/event-bus:/app/packages/event-bus
+      - ./services/svc-productos:/app/services/svc-productos
+      - erp-node-modules:/app/node_modules
+    command: >
+      sh -c "npm run build --workspace=@erp/shared-types
+      && npm run build --workspace=@erp/event-bus
+      && npm run dev --workspace=@erp/svc-productos"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgres://productos_user:productos_pass@postgres-productos:5432/productos_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: debug
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "300"
+    ports:
+      - "3001:3001"
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/shared-types
+          target: /app/packages/shared-types
+        - action: sync
+          path: ./packages/event-bus
+          target: /app/packages/event-bus
+        - action: sync
+          path: ./services/svc-productos
+          target: /app/services/svc-productos
+        - action: rebuild
+          path: ./package.json
+
+  # ── svc-ordenes (dev) ─────────────────────────────────────────────────────
+  svc-ordenes:
+    build:
+      context: .
+      dockerfile: services/svc-ordenes/Dockerfile
+      target: deps
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./tsconfig.base.json:/app/tsconfig.base.json:ro
+      - ./packages/shared-types:/app/packages/shared-types
+      - ./packages/event-bus:/app/packages/event-bus
+      - ./services/svc-ordenes:/app/services/svc-ordenes
+      - erp-node-modules:/app/node_modules
+    command: >
+      sh -c "npm run build --workspace=@erp/shared-types
+      && npm run build --workspace=@erp/event-bus
+      && npm run dev --workspace=@erp/svc-ordenes"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: postgres://ordenes_user:ordenes_pass@postgres-ordenes:5432/ordenes_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: debug
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "3002:3002"
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/shared-types
+          target: /app/packages/shared-types
+        - action: sync
+          path: ./packages/event-bus
+          target: /app/packages/event-bus
+        - action: sync
+          path: ./services/svc-ordenes
+          target: /app/services/svc-ordenes
+
+  # ── svc-stock (dev) ───────────────────────────────────────────────────────
+  svc-stock:
+    build:
+      context: .
+      dockerfile: services/svc-stock/Dockerfile
+      target: deps
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./tsconfig.base.json:/app/tsconfig.base.json:ro
+      - ./packages/shared-types:/app/packages/shared-types
+      - ./packages/event-bus:/app/packages/event-bus
+      - ./services/svc-stock:/app/services/svc-stock
+      - erp-node-modules:/app/node_modules
+    command: >
+      sh -c "npm run build --workspace=@erp/shared-types
+      && npm run build --workspace=@erp/event-bus
+      && npm run dev --workspace=@erp/svc-stock"
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: postgres://stock_user:stock_pass@postgres-stock:5432/stock_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: debug
+      STOCK_ALERTA_UMBRAL: 10
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "3003:3003"
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/shared-types
+          target: /app/packages/shared-types
+        - action: sync
+          path: ./packages/event-bus
+          target: /app/packages/event-bus
+        - action: sync
+          path: ./services/svc-stock
+          target: /app/services/svc-stock
+
+  # ── svc-obs (dev) ─────────────────────────────────────────────────────────
+  svc-obs:
+    build:
+      context: .
+      dockerfile: services/svc-obs/Dockerfile
+      target: deps
+    volumes:
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./tsconfig.base.json:/app/tsconfig.base.json:ro
+      - ./packages/shared-types:/app/packages/shared-types
+      - ./packages/event-bus:/app/packages/event-bus
+      - ./services/svc-obs:/app/services/svc-obs
+      - erp-node-modules:/app/node_modules
+    command: >
+      sh -c "npm run build --workspace=@erp/shared-types
+      && npm run build --workspace=@erp/event-bus
+      && npm run dev --workspace=@erp/svc-obs"
+    environment:
+      NODE_ENV: development
+      PORT: 3004
+      DATABASE_URL: postgres://obs_user:obs_pass@postgres-obs:5432/obs_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: debug
+      SLA_THRESHOLD_SECONDS: 60
+      SLA_CHECK_INTERVAL_MS: 30000
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "3004:3004"
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/shared-types
+          target: /app/packages/shared-types
+        - action: sync
+          path: ./packages/event-bus
+          target: /app/packages/event-bus
+        - action: sync
+          path: ./services/svc-obs
+          target: /app/services/svc-obs
+
+  # ── dashboard (dev: Vite HMR) ─────────────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile.dev
+    volumes:
+      - ./dashboard:/app/dashboard
+      - /app/dashboard/node_modules
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      nginx:
+        condition: service_healthy
+
+  # ── nginx: sin cambios, solo hereda del base ──────────────────────────────
+  nginx:
+    ports:
+      - "80:80"
+
+volumes:
+  erp-node-modules:
