@@ -111,20 +111,48 @@ bootstrap().catch((err) => {
   process.exit(1);
 });
 
-process.on("SIGTERM", async () => {
-  await stopOutboxRelay();
-  await stopRetentionJob();
-  await app.close();
-  await eventBus.close();
-  await pool.end();
-  process.exit(0);
-});
+export let isShuttingDown = false;
 
-process.on("SIGINT", async () => {
-  await stopOutboxRelay();
-  await stopRetentionJob();
-  await app.close();
-  await eventBus.close();
-  await pool.end();
-  process.exit(0);
-});
+async function gracefulShutdown(signal: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[shutdown] ${signal} received — draining (10s timeout)`);
+  const timeout = setTimeout(() => {
+    console.error("[shutdown] forced exit after 10s");
+    process.exit(1);
+  }, 10_000);
+  timeout.unref?.();
+
+  try {
+    await stopOutboxRelay().catch((e) => console.error("[shutdown] stopOutboxRelay", e));
+    await stopRetentionJob().catch((e) => console.error("[shutdown] stopRetentionJob", e));
+    try {
+      await app.close();
+    } catch (e) {
+      console.error("[shutdown] app.close", e);
+    }
+    try {
+      const server = app.server as unknown as {
+        closeAllConnections?: () => void;
+        closeIdleConnections?: () => void;
+      };
+      server.closeAllConnections?.();
+      server.closeIdleConnections?.();
+    } catch {
+      void 0;
+    }
+    await eventBus.close().catch((e) => console.error("[shutdown] eventBus.close", e));
+    await pool.end().catch((e) => console.error("[shutdown] pool.end", e));
+    console.log("[shutdown] graceful exit");
+    clearTimeout(timeout);
+    process.exit(0);
+  } catch (e) {
+    console.error("[shutdown] failed", e);
+    clearTimeout(timeout);
+    process.exit(1);
+  }
+}
+
+process.on("SIGTERM", () => void gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => void gracefulShutdown("SIGINT"));
+process.on("SIGUSR2", () => void gracefulShutdown("SIGUSR2"));

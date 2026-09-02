@@ -28,7 +28,10 @@ const OrdenCreadaSchema = z.object({
 });
 
 const OrdenConfirmadaSchema = z.object({ ordenId: z.string().uuid(), confirmadaEn: z.string() });
-const OrdenCanceladaSchema = z.object({ ordenId: z.string().uuid(), motivo: z.string().optional() });
+const OrdenCanceladaSchema = z.object({
+  ordenId: z.string().uuid(),
+  motivo: z.string().optional(),
+});
 
 function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName: string): T {
   const parsed = schema.safeParse(payload);
@@ -71,8 +74,8 @@ async function storeAndBroadcast(event: DomainEvent): Promise<boolean> {
     client.release();
   }
 
-  // Broadcast to all connected SSE clients
-  broadcast("event", {
+  // Broadcast to all connected SSE clients (via Redis adapter if enabled)
+  await broadcast("event", {
     eventId: event.id,
     eventName: event.name,
     source: event.source,

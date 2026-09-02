@@ -15,6 +15,9 @@ Todos los comandos asumen que el stack está levantado con Docker Compose.
 6. [Retención y purga de datos](#6-retención-y-purga-de-datos)
 7. [Backup y Restore (PITR)](#7-backup-y-restore-pitr)
 8. [Seeds y fixtures](#8-seeds-y-fixtures)
+9. [Escalado horizontal](#9-escalado-horizontal)
+10. [Graceful shutdown y circuit breaker](#10-graceful-shutdown-y-circuit-breaker)
+11. [Chaos y resiliencia](#11-chaos-y-resiliencia)
 
 ---
 
@@ -395,3 +398,145 @@ DATABASE_URL=postgres://productos_user:productos_pass@localhost:5433/productos_d
 Fuente: `services/svc-productos/src/seed/fixtures.ts` (`generateProductos`, `generateOrdenes`) y `src/seed/large.ts`.
 
 Para k6 (Fase 7): `tests/load/order-flow.js` usa `SKU-LARGE-*` y valida confirmación vía SSE.
+
+---
+
+## 9. Escalado horizontal
+
+### SSE con Redis PubSub
+
+`svc-obs` soporta `SSE_ADAPTER=memory|redis` (env, default `memory`). En producción con N réplicas, usar `redis`:
+
+```bash
+# .env / docker-compose.yml
+SSE_ADAPTER=redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
+- `memory`: solo `Map` local (rápido, para dev/tests sin Redis).
+- `redis`: fan-out vía `ioredis` PubSub en `channel sse:broadcast`. Cada réplica mantiene `Map` local, pero `broadcast()` hace `PUBLISH` y cada réplica `SUBSCRIBE` hace `localBroadcast`. Rollback instantáneo: `SSE_ADAPTER=memory`.
+
+**Verificar 2 réplicas sin pérdida (F5 criterio):**
+
+```bash
+docker compose up -d --scale svc-obs=2
+# Abre 2 streams SSE (simulan 100 clientes)
+curl -N http://localhost/api/v1/obs/events/stream &  # cliente A (réplica 1)
+curl -N http://localhost/api/v1/obs/events/stream &  # cliente B (réplica 2)
+# Crear orden que genera 3 eventos (order.created → stock.reserved → order.confirmed)
+curl -X POST http://localhost/api/v1/ordenes -H "Content-Type: application/json" \
+  -d '{"lineas":[{"productoId":"11111111-1111-4111-8111-111111111001","sku":"SKU-SEED-001","cantidad":1,"precioUnitario":89.99}]}'
+# Ambos streams deben ver los 3 eventos con mismo correlationId (fan-out Redis)
+docker compose logs svc-obs | grep "sse:broker.*redis"
+curl -s http://localhost:3004/health | jq .sseAdapter # debe ser "redis"
+```
+
+Para k6 con 100 VUs:
+
+```bash
+docker compose up --scale svc-obs=2 -d
+k6 run tests/load/sse-fanout.js  # 100 VUs, cada VU abre SSE y espera order.confirmed
+# Criterio: 0 eventos perdidos, p95 <1s
+```
+
+### Recursos y hardening
+
+`docker-compose.yml` para los 4 servicios Node añade:
+
+```yaml
+read_only: true
+tmpfs: ["/tmp:rw,noexec,nosuid,size=100m"]
+security_opt: ["no-new-privileges:true"]
+stop_grace_period: 15s
+deploy:
+  resources:
+    limits: { cpus: "1.0", memory: 512M }
+    reservations: { cpus: "0.25", memory: 256M }
+mem_limit: 512m
+cpus: 1.0
+healthcheck:
+  test: ["CMD-SHELL", "curl -f http://127.0.0.1:300X/health || exit 1"]
+```
+
+Ver `docs/adr/008-resiliencia-escalabilidad.md`.
+
+---
+
+## 10. Graceful shutdown y circuit breaker
+
+### Cierre controlado (10s drain)
+
+Cada servicio maneja `SIGTERM`/`SIGINT`/`SIGUSR2`:
+
+1. `setShuttingDown(true)` → `/health/ready` devuelve 503 (K8s deja de enviar tráfico).
+2. `stopOutboxRelay()` / `stopRetentionJob()` / `stopSlaChecker()` (obs) + `closeSseBroker()` (obs).
+3. `app.close()` (Fastify stop accepting) + `closeAllConnections()`.
+4. `eventBus.close()` (Worker + Queues) y `pool.end()`.
+5. `forced exit` a los 10s si no termina.
+
+`docker-compose.yml` `stop_grace_period:15s` da 5s de margen sobre los 10s de app.
+
+```bash
+docker compose restart svc-obs --timeout 15
+docker compose logs -f svc-obs | grep shutdown
+curl -i http://localhost:3004/health/ready  # 503 durante draining, 200 tras reinicio
+```
+
+### Circuit breaker y jitter
+
+`packages/resilience` expone `CircuitBreaker` y `retryWithJitter`.
+
+- `pool.ts` usa `waitForWithJitter(async () => pool.connect SELECT 1, retries, 500, 5000)` con jitter 0.25 y `dbBreaker` (`failureThreshold:5`).
+- `getPoolMetrics()` incluye `breakerState: closed|open|half_open`.
+
+```bash
+curl -s http://localhost:3001/health | jq .pool.breakerState
+# "closed" normal, "open" si DB caída 5 fallos seguidos → se abre 10s, luego half_open
+```
+
+Ver `packages/resilience/src/index.ts`.
+
+### Health agregado
+
+- `GET /health` (nginx) → `svc-obs GET /health/aggregate` (fan-out paralelo a los 4 servicios, timeout 2s).
+- `GET /health/ready` → solo self DB+Redis + `!isShuttingDown` (K8s readiness).
+- `GET /health/live` → `{status, uptime, isShuttingDown}` (liveness).
+
+```bash
+curl -s http://localhost/health | jq .        # agregado (200 si todos ok, 503 si alguno error)
+curl -s http://localhost/health/ready | jq .  # readiness solo obs
+curl -s http://localhost:3001/health/ready | jq . # readiness por servicio
+curl -s http://localhost:3001/health/live | jq .
+for SVC in productos ordenes stock obs; do curl -s http://localhost/health/$SVC | jq .status; done
+```
+
+Ver `services/svc-obs/src/routes/health-aggregate.ts` y `nginx/nginx.conf:176`.
+
+---
+
+## 11. Chaos y resiliencia
+
+### Chaos manual (F5.6)
+
+```bash
+# Mata svc-stock 8s mid-saga, verifica compensación
+./tests/chaos/kill-stock.sh
+# o make chaos
+make chaos
+# Debe terminar con ✓ PASS y orden en estado confirmada o cancelada (nunca pending)
+```
+
+El script (`tests/chaos/kill-stock.sh`) crea orden, hace `docker compose kill svc-stock`, espera 8s, levanta, y hace polling `GET /api/v1/ordenes/:id` 20s. El `outbox` relay con `SELECT FOR UPDATE SKIP LOCKED` reintenta (<500ms) y la saga se recupera.
+
+**Criterio F5:** `docker compose up --scale svc-obs=2` pasa E2E (`tests/e2e/flow.test.ts`) y `kill-stock.sh` pasa sin órdenes `pending` huérfanas.
+
+### Verificación post-caos
+
+```bash
+docker compose logs svc-ordenes | grep "stock.reservado\|stock.insuficiente"
+docker compose logs svc-obs | grep "sse:broker"
+curl -s http://localhost/api/v1/obs/events?eventName=stock.reservado | jq '.data | length'
+```
+
+Ver `docs/adr/008-resiliencia-escalabilidad.md` y `.env.example:66` (`SSE_ADAPTER`, `HEALTH_AGGREGATE_TIMEOUT_MS`).

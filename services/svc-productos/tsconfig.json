@@ -8,15 +8,29 @@
       "@erp/event-bus": ["../../packages/event-bus/src/index.ts"],
       "@erp/env": ["../../packages/env/src/index.ts"],
       "@erp/auth": ["../../packages/auth/src/index.ts"],
-      "@erp/db-migrate": ["../../packages/db-migrate/src/index.ts"]
+      "@erp/db-migrate": ["../../packages/db-migrate/src/index.ts"],
+      "@erp/resilience": ["../../packages/resilience/src/index.ts"]
     }
   },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/shared-types" },
-    { "path": "../../packages/event-bus" },
-    { "path": "../../packages/env" },
-    { "path": "../../packages/auth" },
-    { "path": "../../packages/db-migrate" }
+    {
+      "path": "../../packages/shared-types"
+    },
+    {
+      "path": "../../packages/event-bus"
+    },
+    {
+      "path": "../../packages/env"
+    },
+    {
+      "path": "../../packages/auth"
+    },
+    {
+      "path": "../../packages/db-migrate"
+    },
+    {
+      "path": "../../packages/resilience"
+    }
   ]
 }

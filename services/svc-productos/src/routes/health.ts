@@ -77,4 +77,22 @@ export async function healthRoutes(app: FastifyInstance) {
       };
     }
   );
+
+  app.get("/health/ready", async (_req, reply) => {
+    try {
+      await pool.query("SELECT 1");
+    } catch {
+      return reply.status(503).send({ status: "error", reason: "db" });
+    }
+    try {
+      await eventBus.ping();
+    } catch {
+      return reply.status(503).send({ status: "error", reason: "redis" });
+    }
+    return reply.send({ status: "ok", service: "svc-productos" });
+  });
+
+  app.get("/health/live", async (_req, reply) => {
+    return reply.send({ status: "ok", service: "svc-productos", uptime: process.uptime() });
+  });
 }

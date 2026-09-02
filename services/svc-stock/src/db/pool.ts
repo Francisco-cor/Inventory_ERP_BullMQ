@@ -1,4 +1,5 @@
 import pg from "pg";
+import { waitForWithJitter, CircuitBreaker } from "@erp/resilience";
 
 const { Pool } = pg;
 
@@ -16,6 +17,12 @@ export const pool = new Pool({
   query_timeout: Number(process.env.DB_QUERY_TIMEOUT_MS ?? 5000),
 });
 
+export const dbBreaker = new CircuitBreaker({
+  failureThreshold: 5,
+  resetTimeoutMs: 10_000,
+  halfOpenMaxCalls: 2,
+});
+
 pool.on("error", (err) => {
   console.error("[db] Unexpected error on idle client:", err);
 });
@@ -29,18 +36,25 @@ pool.on("connect", (client) => {
   );
 });
 
-export async function waitForDatabase(retries = 10, delayMs = 2000): Promise<void> {
-  for (let i = 1; i <= retries; i++) {
-    try {
-      const client = await pool.connect();
-      client.release();
-      console.log("[db] Connection established");
-      return;
-    } catch (err) {
-      console.warn(`[db] Connection attempt ${i}/${retries} failed. Retrying in ${delayMs}ms...`);
-      if (i === retries) throw err;
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
+export async function waitForDatabase(retries = 10, baseDelayMs = 500): Promise<void> {
+  try {
+    await waitForWithJitter(
+      async () => {
+        const client = await pool.connect();
+        try {
+          await client.query("SELECT 1");
+        } finally {
+          client.release();
+        }
+        console.log("[db] Connection established");
+      },
+      retries,
+      baseDelayMs,
+      5000
+    );
+  } catch (err) {
+    console.error("[db] PostgreSQL not available after retries", err);
+    throw err;
   }
 }
 
@@ -49,5 +63,6 @@ export function getPoolMetrics() {
     totalCount: pool.totalCount,
     idleCount: pool.idleCount,
     waitingCount: pool.waitingCount,
+    breakerState: dbBreaker.getState(),
   };
 }

@@ -43,6 +43,8 @@ const BaseEnvSchema = z
     // Servicio obs
     SLA_THRESHOLD_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
     SLA_CHECK_INTERVAL_MS: z.coerce.number().int().min(1000).max(600000).default(30000),
+    SSE_ADAPTER: z.enum(["memory", "redis"]).default("memory"),
+    HEALTH_AGGREGATE_TIMEOUT_MS: z.coerce.number().int().min(500).max(10000).default(2000),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === "production" && !data.ADMIN_API_KEY) {

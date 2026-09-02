@@ -120,6 +120,22 @@ services:
         condition: service_healthy
     networks:
       - erp-internal
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    mem_limit: 512m
+    cpus: 1.0
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3001/health || exit 1"]
       interval: 10s
@@ -148,6 +164,22 @@ services:
         condition: service_healthy
     networks:
       - erp-internal
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    mem_limit: 512m
+    cpus: 1.0
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3002/health || exit 1"]
       interval: 10s
@@ -177,6 +209,22 @@ services:
         condition: service_healthy
     networks:
       - erp-internal
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    mem_limit: 512m
+    cpus: 1.0
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3003/health || exit 1"]
       interval: 10s
@@ -222,6 +270,8 @@ services:
       LOG_LEVEL: info
       SLA_THRESHOLD_SECONDS: 60
       SLA_CHECK_INTERVAL_MS: 30000
+      SSE_ADAPTER: redis
+      HEALTH_AGGREGATE_TIMEOUT_MS: 2000
     depends_on:
       postgres-obs:
         condition: service_healthy
@@ -229,6 +279,22 @@ services:
         condition: service_healthy
     networks:
       - erp-internal
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    mem_limit: 512m
+    cpus: 1.0
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:3004/health || exit 1"]
       interval: 10s

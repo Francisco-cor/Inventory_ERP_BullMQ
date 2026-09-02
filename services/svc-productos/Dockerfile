@@ -9,6 +9,7 @@ COPY packages/event-bus/package.json ./packages/event-bus/
 COPY packages/env/package.json ./packages/env/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/db-migrate/package.json ./packages/db-migrate/
+COPY packages/resilience/package.json ./packages/resilience/
 COPY services/svc-productos/package.json ./services/svc-productos/
 RUN npm ci --workspaces --include-workspace-root
 
@@ -23,6 +24,8 @@ COPY packages/auth ./packages/auth
 RUN npm run build --workspace=@erp/auth
 COPY packages/db-migrate ./packages/db-migrate
 RUN npm run build --workspace=@erp/db-migrate
+COPY packages/resilience ./packages/resilience
+RUN npm run build --workspace=@erp/resilience
 
 FROM build-shared AS build-svc
 COPY services/svc-productos ./services/svc-productos
@@ -41,6 +44,8 @@ COPY --from=build-shared /app/packages/auth/dist ./packages/auth/dist
 COPY --from=build-shared /app/packages/auth/package.json ./packages/auth/
 COPY --from=build-shared /app/packages/db-migrate/dist ./packages/db-migrate/dist
 COPY --from=build-shared /app/packages/db-migrate/package.json ./packages/db-migrate/
+COPY --from=build-shared /app/packages/resilience/dist ./packages/resilience/dist
+COPY --from=build-shared /app/packages/resilience/package.json ./packages/resilience/
 COPY --from=build-svc    /app/services/svc-productos/dist ./services/svc-productos/dist
 COPY --from=build-svc    /app/services/svc-productos/migrations ./services/svc-productos/migrations
 COPY --from=build-svc    /app/services/svc-productos/package.json ./services/svc-productos/

@@ -20,6 +20,8 @@ services:
       - ./packages/env:/app/packages/env
       - ./packages/auth:/app/packages/auth
       - ./packages/db-migrate:/app/packages/db-migrate
+      - ./packages/resilience:/app/packages/resilience
+      - ./packages/resilience:/app/packages/resilience
       - ./services/svc-productos:/app/services/svc-productos
       - erp-node-modules:/app/node_modules
     command: >
@@ -28,6 +30,8 @@ services:
       && npm run build --workspace=@erp/env
       && npm run build --workspace=@erp/auth
       && npm run build --workspace=@erp/db-migrate
+      && npm run build --workspace=@erp/resilience
+      && npm run build --workspace=@erp/resilience
       && npm run dev --workspace=@erp/svc-productos"
     environment:
       NODE_ENV: development
@@ -55,6 +59,9 @@ services:
           path: ./packages/auth
           target: /app/packages/auth
         - action: sync
+          path: ./packages/resilience
+          target: /app/packages/resilience
+        - action: sync
           path: ./services/svc-productos
           target: /app/services/svc-productos
         - action: rebuild
@@ -75,6 +82,8 @@ services:
       - ./packages/env:/app/packages/env
       - ./packages/auth:/app/packages/auth
       - ./packages/db-migrate:/app/packages/db-migrate
+      - ./packages/resilience:/app/packages/resilience
+      - ./packages/resilience:/app/packages/resilience
       - ./services/svc-ordenes:/app/services/svc-ordenes
       - erp-node-modules:/app/node_modules
     command: >
@@ -83,6 +92,8 @@ services:
       && npm run build --workspace=@erp/env
       && npm run build --workspace=@erp/auth
       && npm run build --workspace=@erp/db-migrate
+      && npm run build --workspace=@erp/resilience
+      && npm run build --workspace=@erp/resilience
       && npm run dev --workspace=@erp/svc-ordenes"
     environment:
       NODE_ENV: development
@@ -109,6 +120,9 @@ services:
           path: ./packages/auth
           target: /app/packages/auth
         - action: sync
+          path: ./packages/resilience
+          target: /app/packages/resilience
+        - action: sync
           path: ./services/svc-ordenes
           target: /app/services/svc-ordenes
 
@@ -127,6 +141,8 @@ services:
       - ./packages/env:/app/packages/env
       - ./packages/auth:/app/packages/auth
       - ./packages/db-migrate:/app/packages/db-migrate
+      - ./packages/resilience:/app/packages/resilience
+      - ./packages/resilience:/app/packages/resilience
       - ./services/svc-stock:/app/services/svc-stock
       - erp-node-modules:/app/node_modules
     command: >
@@ -135,6 +151,8 @@ services:
       && npm run build --workspace=@erp/env
       && npm run build --workspace=@erp/auth
       && npm run build --workspace=@erp/db-migrate
+      && npm run build --workspace=@erp/resilience
+      && npm run build --workspace=@erp/resilience
       && npm run dev --workspace=@erp/svc-stock"
     environment:
       NODE_ENV: development
@@ -162,6 +180,9 @@ services:
           path: ./packages/auth
           target: /app/packages/auth
         - action: sync
+          path: ./packages/resilience
+          target: /app/packages/resilience
+        - action: sync
           path: ./services/svc-stock
           target: /app/services/svc-stock
 
@@ -180,6 +201,8 @@ services:
       - ./packages/env:/app/packages/env
       - ./packages/auth:/app/packages/auth
       - ./packages/db-migrate:/app/packages/db-migrate
+      - ./packages/resilience:/app/packages/resilience
+      - ./packages/resilience:/app/packages/resilience
       - ./services/svc-obs:/app/services/svc-obs
       - erp-node-modules:/app/node_modules
     command: >
@@ -188,6 +211,8 @@ services:
       && npm run build --workspace=@erp/env
       && npm run build --workspace=@erp/auth
       && npm run build --workspace=@erp/db-migrate
+      && npm run build --workspace=@erp/resilience
+      && npm run build --workspace=@erp/resilience
       && npm run dev --workspace=@erp/svc-obs"
     environment:
       NODE_ENV: development
@@ -215,6 +240,9 @@ services:
         - action: sync
           path: ./packages/auth
           target: /app/packages/auth
+        - action: sync
+          path: ./packages/resilience
+          target: /app/packages/resilience
         - action: sync
           path: ./services/svc-obs
           target: /app/services/svc-obs

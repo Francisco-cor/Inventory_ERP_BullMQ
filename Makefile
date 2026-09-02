@@ -4,7 +4,7 @@
 COMPOSE_BASE := docker compose
 COMPOSE_DEV  := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
-.PHONY: help dev dev-watch up down restart logs clean build type-check lint lint-fix format format-check test seed migrate ps
+.PHONY: help dev dev-watch up down restart logs clean build type-check lint lint-fix format format-check test seed migrate ps chaos chaos-scale
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -77,6 +77,18 @@ restore: ## Restore desde backup (uso: make restore BACKUP_DIR=./backups/...)
 
 migrate: ## Ejecuta migraciones en todos los servicios
 	npm run migrate --workspaces --if-present
+
+chaos: ## Chaos test — mata svc-stock mid-saga y verifica recuperación
+	@bash tests/chaos/kill-stock.sh
+
+chaos-scale: ## Verifica escalado horizontal de svc-obs (2 réplicas + SSE fan-out)
+	@echo "Escalando svc-obs a 2 réplicas..."
+	docker compose up -d --scale svc-obs=2
+	@sleep 5
+	@curl -s http://localhost/health | jq . || true
+	@echo "Abre 2 streams SSE y crea orden de prueba..."
+	@curl -s -X POST http://localhost/api/v1/ordenes -H "Content-Type: application/json" -d '{"lineas":[{"productoId":"11111111-1111-4111-8111-111111111001","sku":"SKU-SEED-001","cantidad":1,"precioUnitario":89.99}]}' | jq . || true
+	@echo "Verifica docker compose logs svc-obs | grep sse:broker"
 
 clean: ## Limpia dist, coverage y tsbuildinfo
 	rm -rf packages/*/dist services/*/dist dashboard/dist

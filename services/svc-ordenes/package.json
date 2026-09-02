@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@erp/svc-ordenes",
   "version": "1.0.0",
   "private": true,
@@ -32,7 +32,8 @@
     "fastify": "^5.0.0",
     "pg": "^8.13.0",
     "uuid": "^11.0.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@erp/resilience": "*"
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",
