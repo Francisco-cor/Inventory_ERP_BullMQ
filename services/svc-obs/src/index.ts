@@ -10,6 +10,7 @@ import { adminRoutes } from "./routes/admin.js";
 import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
 import { startOutboxRelay, stopOutboxRelay } from "./jobs/outbox-relay.js";
+import { startRetentionJob, stopRetentionJob } from "./jobs/retention.js";
 import { startSlaChecker, stopSlaChecker } from "./jobs/sla-checker.js";
 
 const PORT = Number(process.env.PORT ?? 3004);
@@ -74,7 +75,10 @@ async function bootstrap(): Promise<void> {
     const serverAdapter = new FastifyAdapter();
     serverAdapter.setBasePath("/admin/queues");
     const q = new Queue("events-svc-obs", {
-      connection: { host: process.env.REDIS_HOST ?? "redis", port: Number(process.env.REDIS_PORT ?? 6379) },
+      connection: {
+        host: process.env.REDIS_HOST ?? "redis",
+        port: Number(process.env.REDIS_PORT ?? 6379),
+      },
     });
     createBullBoard({ queues: [new BullMQAdapter(q)], serverAdapter });
     await app.register(serverAdapter.registerPlugin(), { prefix: "/admin/queues" });
@@ -85,6 +89,7 @@ async function bootstrap(): Promise<void> {
 
   startEventConsumer();
   startOutboxRelay();
+  startRetentionJob();
   await startSlaChecker({ host: REDIS_HOST, port: REDIS_PORT });
 
   await app.listen({ port: PORT, host: HOST });
@@ -99,6 +104,17 @@ bootstrap().catch((err) => {
 
 process.on("SIGTERM", async () => {
   await stopOutboxRelay();
+  await stopRetentionJob();
+  await stopSlaChecker();
+  await app.close();
+  await eventBus.close();
+  await pool.end();
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  await stopOutboxRelay();
+  await stopRetentionJob();
   await stopSlaChecker();
   await app.close();
   await eventBus.close();

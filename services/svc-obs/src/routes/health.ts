@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { pool } from "../db/pool.js";
+import { pool, getPoolMetrics } from "../db/pool.js";
 import { clientCount } from "../sse/broker.js";
 import { eventBus } from "../events/bus.js";
 
@@ -17,6 +17,8 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
               db: { type: "string" },
               redis: { type: "string" },
               sseClients: { type: "number" },
+              pool: { type: "object" },
+              outboxPending: { type: "number" },
               timestamp: { type: "string" },
             },
           },
@@ -28,6 +30,8 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
               db: { type: "string" },
               redis: { type: "string" },
               sseClients: { type: "number" },
+              pool: { type: "object" },
+              outboxPending: { type: "number" },
               timestamp: { type: "string" },
             },
           },
@@ -35,34 +39,36 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (_req, reply) => {
-      console.log(`[health] Check requested for svc-obs`);
       let dbStatus = "ok";
       let redisStatus = "ok";
-
+      let outboxPending = 0;
       try {
         await pool.query("SELECT 1");
-      } catch (err) {
-        console.error(`[health] DB Error in svc-obs:`, err);
+      } catch {
         dbStatus = "error";
       }
-
       try {
         await eventBus.ping();
-      } catch (err) {
-        console.error(`[health] Redis Error in svc-obs:`, err);
+      } catch {
         redisStatus = "error";
       }
-
+      try {
+        const { rows } = await pool.query(
+          `SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL`
+        );
+        outboxPending = rows[0].pending;
+      } catch {
+        void 0;
+      }
       const healthy = dbStatus === "ok" && redisStatus === "ok";
-      console.log(
-        `[health] svc-obs status: ${healthy ? "ok" : "degraded"} (db:${dbStatus}, redis:${redisStatus})`
-      );
       return reply.status(healthy ? 200 : 503).send({
         status: healthy ? "ok" : "degraded",
         service: "svc-obs",
         db: dbStatus,
         redis: redisStatus,
         sseClients: clientCount(),
+        pool: getPoolMetrics(),
+        outboxPending,
         timestamp: new Date().toISOString(),
       });
     }

@@ -12,6 +12,7 @@ import { registerSwagger } from "./routes/swagger.js";
 import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
 import { startOutboxRelay, stopOutboxRelay } from "./jobs/outbox-relay.js";
+import { startRetentionJob, stopRetentionJob } from "./jobs/retention.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -84,7 +85,10 @@ async function bootstrap() {
     const serverAdapter = new FastifyAdapter();
     serverAdapter.setBasePath("/admin/queues");
     const q = new Queue("events-svc-stock", {
-      connection: { host: process.env.REDIS_HOST ?? "redis", port: Number(process.env.REDIS_PORT ?? 6379) },
+      connection: {
+        host: process.env.REDIS_HOST ?? "redis",
+        port: Number(process.env.REDIS_PORT ?? 6379),
+      },
     });
     createBullBoard({ queues: [new BullMQAdapter(q)], serverAdapter });
     await app.register(serverAdapter.registerPlugin(), { prefix: "/admin/queues" });
@@ -95,6 +99,7 @@ async function bootstrap() {
 
   await startEventConsumer();
   startOutboxRelay();
+  startRetentionJob();
 
   await app.listen({ port: PORT, host: HOST });
   app.log.info(`svc-stock listening on http://${HOST}:${PORT}`);
@@ -108,6 +113,16 @@ bootstrap().catch((err) => {
 
 process.on("SIGTERM", async () => {
   await stopOutboxRelay();
+  await stopRetentionJob();
+  await app.close();
+  await eventBus.close();
+  await pool.end();
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  await stopOutboxRelay();
+  await stopRetentionJob();
   await app.close();
   await eventBus.close();
   await pool.end();

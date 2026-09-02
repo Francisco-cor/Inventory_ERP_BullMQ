@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { pool } from "../db/pool.js";
+import { pool, getPoolMetrics } from "../db/pool.js";
 import { eventBus } from "../events/bus.js";
 
 export async function healthRoutes(app: FastifyInstance) {
@@ -18,6 +18,8 @@ export async function healthRoutes(app: FastifyInstance) {
               db: { type: "string" },
               redis: { type: "string" },
               uptime: { type: "number" },
+              pool: { type: "object" },
+              outboxPending: { type: "number" },
             },
           },
           503: {
@@ -28,36 +30,40 @@ export async function healthRoutes(app: FastifyInstance) {
               db: { type: "string" },
               redis: { type: "string" },
               uptime: { type: "number" },
+              pool: { type: "object" },
+              outboxPending: { type: "number" },
             },
           },
         },
       },
     },
     async (_req, reply) => {
-      console.log(`[health] Check requested for svc-productos`);
       let dbStatus = "ok";
       let redisStatus = "ok";
+      let outboxPending = 0;
 
       try {
-        const client = await pool.connect();
-        await client.query("SELECT 1");
-        client.release();
+        await pool.query("SELECT 1");
       } catch (err) {
-        console.error(`[health] DB Error in svc-productos:`, err);
         dbStatus = "error";
       }
 
       try {
         await eventBus.ping();
       } catch (err) {
-        console.error(`[health] Redis Error in svc-productos:`, err);
         redisStatus = "error";
       }
 
+      try {
+        const { rows } = await pool.query(
+          `SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL`
+        );
+        outboxPending = rows[0].pending;
+      } catch {
+        void 0;
+      }
+
       const healthy = dbStatus === "ok" && redisStatus === "ok";
-      console.log(
-        `[health] svc-productos status: ${healthy ? "ok" : "degraded"} (db:${dbStatus}, redis:${redisStatus})`
-      );
       if (!healthy) reply.status(503);
 
       return {
@@ -66,6 +72,8 @@ export async function healthRoutes(app: FastifyInstance) {
         db: dbStatus,
         redis: redisStatus,
         uptime: process.uptime(),
+        pool: getPoolMetrics(),
+        outboxPending,
       };
     }
   );

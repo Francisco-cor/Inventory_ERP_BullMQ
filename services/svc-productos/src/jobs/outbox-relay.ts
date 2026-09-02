@@ -11,9 +11,12 @@ let running = false;
 export function startOutboxRelay(): void {
   if (timer) return;
   console.log(`[outbox-relay:productos] started — poll ${POLL_INTERVAL_MS}ms, batch ${BATCH_SIZE}`);
-  timer = setInterval(() => void tick().catch((e) => console.error("[outbox-relay:productos] tick failed", e)), POLL_INTERVAL_MS);
+  timer = setInterval(
+    () => void tick().catch((e) => console.error("[outbox-relay:productos] tick failed", e)),
+    POLL_INTERVAL_MS
+  );
   // initial tick
-  void tick().catch(() => {});
+  void tick().catch(() => void 0);
 }
 
 export async function stopOutboxRelay(): Promise<void> {
@@ -56,19 +59,37 @@ async function tick(): Promise<void> {
       };
       try {
         // publishRaw preserves id/timestamp
-        await (eventBus as unknown as { publishRaw: (e: typeof event) => Promise<void> }).publishRaw(event);
+        await (
+          eventBus as unknown as { publishRaw: (e: typeof event) => Promise<void> }
+        ).publishRaw(event);
         await client.query(
           `UPDATE outbox SET published_at = NOW(), estado = 'published', attempts = attempts + 1 WHERE id = $1`,
           [row.id]
         );
-        console.log(JSON.stringify({ level: "info", service: "svc-productos", outboxId: row.id, eventName: row.nombre_evento, msg: "outbox published" }));
+        console.log(
+          JSON.stringify({
+            level: "info",
+            service: "svc-productos",
+            outboxId: row.id,
+            eventName: row.nombre_evento,
+            msg: "outbox published",
+          })
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await client.query(
           `UPDATE outbox SET attempts = attempts + 1, last_error = $2 WHERE id = $1`,
           [row.id, msg.slice(0, 1000)]
         );
-        console.error(JSON.stringify({ level: "error", service: "svc-productos", outboxId: row.id, error: msg, msg: "outbox publish failed" }));
+        console.error(
+          JSON.stringify({
+            level: "error",
+            service: "svc-productos",
+            outboxId: row.id,
+            error: msg,
+            msg: "outbox publish failed",
+          })
+        );
       }
     }
 
@@ -76,7 +97,9 @@ async function tick(): Promise<void> {
   } catch (err) {
     try {
       await client.query("ROLLBACK");
-    } catch {}
+    } catch {
+      void 0;
+    }
     throw err;
   } finally {
     client.release();

@@ -12,12 +12,14 @@
     "type-check": "tsc -b",
     "lint": "eslint src",
     "test": "vitest run",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "seed:large": "tsx src/seed/large.ts"
   },
   "dependencies": {
     "@bull-board/api": "^6.12.0",
     "@bull-board/fastify": "^6.12.0",
     "@erp/auth": "*",
+    "@erp/db-migrate": "*",
     "@erp/env": "*",
     "@erp/event-bus": "*",
     "@erp/shared-types": "*",

@@ -18,7 +18,7 @@ export type EventHandler<T = unknown> = (event: DomainEvent<T>) => Promise<void>
 export const CURRENT_SCHEMA_VERSION = "1.0";
 
 // ─── Metrics (in-memory, exposed via getMetrics) ─────────────────────────────
-let metrics = {
+const metrics = {
   published: 0,
   failed: 0,
   consumed: 0,
@@ -75,7 +75,12 @@ export interface DlqStats {
 }
 
 // Default service registry — overridden by EVENT_BUS_SERVICES env (comma-separated).
-const ALL_SERVICES_DEFAULT: ServiceName[] = ["svc-ordenes", "svc-stock", "svc-productos", "svc-obs"];
+const ALL_SERVICES_DEFAULT: ServiceName[] = [
+  "svc-ordenes",
+  "svc-stock",
+  "svc-productos",
+  "svc-obs",
+];
 
 function getAllServices(): ServiceName[] {
   const env = process.env.EVENT_BUS_SERVICES;
@@ -260,7 +265,9 @@ export function createEventBus(config: EventBusConfig) {
   async function publishRaw(event: DomainEvent): Promise<void> {
     validateEventPayload(event.name, event.payload);
     if (event.schemaVersion !== CURRENT_SCHEMA_VERSION) {
-      throw new Error(`ValidationError: cannot publishRaw with schemaVersion ${event.schemaVersion}`);
+      throw new Error(
+        `ValidationError: cannot publishRaw with schemaVersion ${event.schemaVersion}`
+      );
     }
     const targetServices = getAllServices();
     await Promise.all(

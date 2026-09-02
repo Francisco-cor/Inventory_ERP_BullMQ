@@ -8,6 +8,7 @@ COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/event-bus/package.json ./packages/event-bus/
 COPY packages/env/package.json ./packages/env/
 COPY packages/auth/package.json ./packages/auth/
+COPY packages/db-migrate/package.json ./packages/db-migrate/
 COPY services/svc-stock/package.json ./services/svc-stock/
 RUN npm ci --workspaces --include-workspace-root
 
@@ -20,6 +21,8 @@ COPY packages/env ./packages/env
 RUN npm run build --workspace=@erp/env
 COPY packages/auth ./packages/auth
 RUN npm run build --workspace=@erp/auth
+COPY packages/db-migrate ./packages/db-migrate
+RUN npm run build --workspace=@erp/db-migrate
 
 FROM build-shared AS build-svc
 COPY services/svc-stock ./services/svc-stock
@@ -36,6 +39,8 @@ COPY --from=build-shared /app/packages/env/dist ./packages/env/dist
 COPY --from=build-shared /app/packages/env/package.json ./packages/env/
 COPY --from=build-shared /app/packages/auth/dist ./packages/auth/dist
 COPY --from=build-shared /app/packages/auth/package.json ./packages/auth/
+COPY --from=build-shared /app/packages/db-migrate/dist ./packages/db-migrate/dist
+COPY --from=build-shared /app/packages/db-migrate/package.json ./packages/db-migrate/
 COPY --from=build-svc    /app/services/svc-stock/dist ./services/svc-stock/dist
 COPY --from=build-svc    /app/services/svc-stock/migrations ./services/svc-stock/migrations
 COPY --from=build-svc    /app/services/svc-stock/package.json ./services/svc-stock/

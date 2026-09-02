@@ -12,6 +12,9 @@ Todos los comandos asumen que el stack está levantado con Docker Compose.
 3. [Rollback de migración de base de datos](#3-rollback-de-migración-de-base-de-datos)
 4. [SLA Checker](#4-sla-checker)
 5. [Health checks](#5-health-checks)
+6. [Retención y purga de datos](#6-retención-y-purga-de-datos)
+7. [Backup y Restore (PITR)](#7-backup-y-restore-pitr)
+8. [Seeds y fixtures](#8-seeds-y-fixtures)
 
 ---
 
@@ -273,3 +276,122 @@ svc-ordenes: 200
 svc-stock: 200
 svc-obs: 200
 ```
+
+Detalle extendido (Fase 4) incluye `pool` y `outboxPending`:
+
+```bash
+curl -s http://localhost:3001/health | jq .
+# {
+#   "status": "ok",
+#   "service": "svc-productos",
+#   "db": "ok", "redis": "ok",
+#   "pool": { "totalCount": 10, "idleCount": 8, "waitingCount": 0 },
+#   "outboxPending": 0
+# }
+curl -s http://localhost:3004/health | jq .
+# { "status":"ok", "service":"svc-obs", "sseClients": 12, ... }
+```
+
+---
+
+## 6. Retención y purga de datos
+
+Cada servicio purga automáticamente tablas efímeras cada 24h (job `src/jobs/retention.ts`, primera ejecución a los 10s del arranque, luego 24h).
+
+| Servicio      | Tablas purgadas                                                       | Criterio                                                          |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| svc-productos | `eventos_emitidos`, `outbox`                                          | `emitido_en / published_at < NOW() - RETENTION_DAYS` (default 90) |
+| svc-ordenes   | `eventos_emitidos`, `outbox`, `idempotency_keys`                      | `expires_at < NOW()` para idempotency                             |
+| svc-stock     | `eventos_emitidos`, `outbox`, `idempotency_keys`, `movimientos_stock` | `creado_en < RETENTION_DAYS`                                      |
+| svc-obs       | `event_log`, `outbox`, `eventos_recibidos`                            | `event_log.emitido_en < 90d`, `recibido_en < 30d` + `VACUUM`      |
+
+### Configuración
+
+```bash
+# .env / docker-compose
+RETENTION_DAYS=90                # 1..365
+DB_STATEMENT_TIMEOUT_MS=5000
+DB_IDLE_TX_TIMEOUT_MS=30000
+```
+
+### Ejecución manual y métricas
+
+```bash
+# Forzar purga en un servicio (vía psql)
+docker compose exec -T postgres-obs psql -U obs_user -d obs_db -c \
+  "DELETE FROM event_log WHERE emitido_en < NOW() - INTERVAL '90 days' RETURNING *;"
+# Ver lag de outbox (si >100 → alerta Fase 6)
+curl -s http://localhost:3001/health | jq .outboxPending
+curl -s http://localhost:3002/health | jq .outboxPending
+
+# Forzar job en caliente (reinicia servicio, corre a los 10s)
+docker compose restart svc-obs && docker compose logs -f svc-obs | grep retention
+```
+
+El retention usa `DELETE ... WHERE <ts> < NOW() - INTERVAL '1 day' * $1` sin batch en Fase 4; si `n_dead_tup` crece, Fase 6 añadirá batch de 1000.
+
+---
+
+## 7. Backup y Restore (PITR)
+
+### Backup
+
+```bash
+./scripts/backup.sh [out_dir]   # default ./backups/YYYYMMDD_HHMMSS
+# o
+make backup
+```
+
+El script hace `pg_dump -Fc` por cada servicio (`productos`, `ordenes`, `stock`, `obs`) con fallback `docker compose exec`. Para PITR completo, habilita WAL archiving:
+
+```conf
+# postgresql.conf (Fase 11 con CNPG/Helm, documentado aquí)
+wal_level = replica
+archive_mode = on
+archive_command = 'test ! -f /var/lib/postgresql/wal/%f && cp %p /var/lib/postgresql/wal/%f'
+```
+
+Verifica backups:
+
+```bash
+ls -lh ./backups/20250902_120000/
+pg_restore --list ./backups/.../productos.dump | head -20
+```
+
+### Restore
+
+```bash
+./scripts/restore.sh ./backups/20250902_120000
+# borra y restaura con pg_restore --clean --if-exists (CUIDADO: destructivo)
+```
+
+**RPO/RTO:**
+
+- Con `pg_dump` diario: RPO 24h, RTO <10m (4 DBs en paralelo).
+- Con WAL archiving (Fase 11): RPO 5m, RTO <15m (restore + replay).
+
+Ver `docs/adr/007-retencion-datos.md` y `scripts/restore.sh`.
+
+---
+
+## 8. Seeds y fixtures
+
+### Seed determinístico (5 productos)
+
+```bash
+make seed
+# idempotente ON CONFLICT (id) DO UPDATE, IDs fijos 11111111-...001..005
+```
+
+### Seed grande (100 productos sintéticos, para load tests)
+
+```bash
+npm run seed:large --workspace=@erp/svc-productos
+# o
+DATABASE_URL=postgres://productos_user:productos_pass@localhost:5433/productos_db npm run seed:large --workspace=@erp/svc-productos
+# genera SKU-LARGE-100..199 determinístico (seed 42), precio aleatorio 10..510
+```
+
+Fuente: `services/svc-productos/src/seed/fixtures.ts` (`generateProductos`, `generateOrdenes`) y `src/seed/large.ts`.
+
+Para k6 (Fase 7): `tests/load/order-flow.js` usa `SKU-LARGE-*` y valida confirmación vía SSE.

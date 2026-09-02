@@ -65,6 +65,16 @@ seed: ## Ejecuta seeds determinísticos (requiere stack levantado)
 	npm run seed --workspace=@erp/svc-stock || true
 	@echo "Seed completado. Verifica con curl http://localhost:80/api/v1/productos"
 
+seed-large: ## Seed de 100 productos sintéticos para load tests
+	npm run seed:large --workspace=@erp/svc-productos || true
+	@echo "Seed large completado (100 productos SKU-LARGE-*)"
+
+backup: ## Backup de todas las DBs (pg_dump)
+	@bash scripts/backup.sh
+
+restore: ## Restore desde backup (uso: make restore BACKUP_DIR=./backups/...)
+	@bash scripts/restore.sh $(BACKUP_DIR)
+
 migrate: ## Ejecuta migraciones en todos los servicios
 	npm run migrate --workspaces --if-present
 

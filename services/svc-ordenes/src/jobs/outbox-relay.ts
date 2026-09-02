@@ -11,8 +11,11 @@ let running = false;
 export function startOutboxRelay(): void {
   if (timer) return;
   console.log(`[outbox-relay:ordenes] started — poll ${POLL_INTERVAL_MS}ms`);
-  timer = setInterval(() => void tick().catch((e) => console.error("[outbox-relay:ordenes] tick failed", e)), POLL_INTERVAL_MS);
-  void tick().catch(() => {});
+  timer = setInterval(
+    () => void tick().catch((e) => console.error("[outbox-relay:ordenes] tick failed", e)),
+    POLL_INTERVAL_MS
+  );
+  void tick().catch(() => void 0);
 }
 
 export async function stopOutboxRelay(): Promise<void> {
@@ -52,18 +55,46 @@ async function tick(): Promise<void> {
         schemaVersion: CURRENT_SCHEMA_VERSION,
       };
       try {
-        await (eventBus as unknown as { publishRaw: (e: typeof event) => Promise<void> }).publishRaw(event);
-        await client.query(`UPDATE outbox SET published_at = NOW(), estado = 'published', attempts = attempts + 1 WHERE id = $1`, [row.id]);
-        console.log(JSON.stringify({ level: "info", service: "svc-ordenes", outboxId: row.id, eventName: row.nombre_evento, msg: "outbox published" }));
+        await (
+          eventBus as unknown as { publishRaw: (e: typeof event) => Promise<void> }
+        ).publishRaw(event);
+        await client.query(
+          `UPDATE outbox SET published_at = NOW(), estado = 'published', attempts = attempts + 1 WHERE id = $1`,
+          [row.id]
+        );
+        console.log(
+          JSON.stringify({
+            level: "info",
+            service: "svc-ordenes",
+            outboxId: row.id,
+            eventName: row.nombre_evento,
+            msg: "outbox published",
+          })
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        await client.query(`UPDATE outbox SET attempts = attempts + 1, last_error = $2 WHERE id = $1`, [row.id, msg.slice(0, 1000)]);
-        console.error(JSON.stringify({ level: "error", service: "svc-ordenes", outboxId: row.id, error: msg, msg: "outbox publish failed" }));
+        await client.query(
+          `UPDATE outbox SET attempts = attempts + 1, last_error = $2 WHERE id = $1`,
+          [row.id, msg.slice(0, 1000)]
+        );
+        console.error(
+          JSON.stringify({
+            level: "error",
+            service: "svc-ordenes",
+            outboxId: row.id,
+            error: msg,
+            msg: "outbox publish failed",
+          })
+        );
       }
     }
     await client.query("COMMIT");
   } catch (err) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      void 0;
+    }
     throw err;
   } finally {
     client.release();
