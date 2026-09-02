@@ -1,203 +1,117 @@
-import React, { useEffect, useRef, useState } from "react";
+import * as React from "react";
 import type { EventEntry } from "../types.js";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card.js";
+import { Input } from "./ui/input.js";
+import { Badge } from "./ui/badge.js";
+import { cn } from "../lib/utils.js";
 
 const EVENT_COLORS: Record<string, string> = {
-  "orden.creada": "#58a6ff",
-  "orden.confirmada": "#3fb950",
-  "orden.cancelada": "#f85149",
-  "stock.reservado": "#d2a8ff",
-  "stock.insuficiente": "#ffa657",
-  "stock.liberado": "#79c0ff",
-  "stock.alerta": "#ffa657",
-  "stock.ajustado": "#a5d6ff",
-  "producto.creado": "#7ee787",
-  "producto.actualizado": "#e3b341",
-  "producto.eliminado": "#f85149",
+  "orden.creada": "text-[#58a6ff]",
+  "orden.confirmada": "text-[#3fb950]",
+  "orden.cancelada": "text-[#f85149]",
+  "stock.reservado": "text-[#d2a8ff]",
+  "stock.insuficiente": "text-[#ffa657]",
+  "stock.liberado": "text-[#79c0ff]",
+  "stock.alerta": "text-[#ffa657]",
+  "stock.ajustado": "text-[#a5d6ff]",
+  "producto.creado": "text-[#7ee787]",
+  "producto.actualizado": "text-[#e3b341]",
+  "producto.eliminado": "text-[#f85149]",
 };
-
-const MAX_EVENTS = 200;
 
 interface Props {
-  sseUrl: string;
-  onSlaWarning: (alert: { ordenId: string; creadaEn: string; segundosPendiente: number }) => void;
+  events: EventEntry[];
+  connected: boolean;
+  onClear?: () => void;
 }
 
-export function EventLog({ sseUrl, onSlaWarning }: Props) {
-  const [events, setEvents] = useState<EventEntry[]>([]);
-  const [connected, setConnected] = useState(false);
-  const [filter, setFilter] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const autoScroll = useRef(true);
+const EventRow = React.memo(function EventRow({ ev }: { ev: EventEntry }) {
+  return (
+    <div className="grid grid-cols-[80px_190px_110px_90px_1fr] gap-2 border-b border-[#21262d] px-4 py-1 text-xs leading-6 hover:bg-[#1f2937]/30">
+      <span className="text-muted-foreground">{new Date(ev.timestamp).toLocaleTimeString()}</span>
+      <span
+        className={cn("font-semibold truncate", EVENT_COLORS[ev.eventName] ?? "text-foreground")}
+      >
+        {ev.eventName}
+      </span>
+      <span className="truncate text-muted-foreground">{ev.source}</span>
+      <span className="font-mono text-muted-foreground">
+        {ev.correlationId?.slice(0, 8) || "no-id"}
+      </span>
+      <span className="truncate text-muted-foreground">
+        {JSON.stringify(ev.payload).slice(0, 80)}
+      </span>
+    </div>
+  );
+});
 
-  useEffect(() => {
-    let es: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let attempt = 0;
-    let active = true; // set to false on cleanup to cancel pending reconnects
+export function EventLog({ events, connected, onClear }: Props) {
+  const [filter, setFilter] = React.useState("");
+  const bottomRef = React.useRef<HTMLDivElement>(null);
+  const autoScroll = React.useRef(true);
+  const deferredFilter = React.useDeferredValue(filter);
 
-    function connect() {
-      if (!active) return;
-      es = new EventSource(sseUrl);
+  // Filter with useMemo to avoid full re-render total (8.2 criterion)
+  const filtered = React.useMemo(() => {
+    if (!deferredFilter) return events;
+    const f = deferredFilter.toLowerCase();
+    return events.filter(
+      (e) =>
+        e.eventName.toLowerCase().includes(f) ||
+        e.source.toLowerCase().includes(f) ||
+        (e.correlationId?.toLowerCase().includes(f) ?? false)
+    );
+  }, [events, deferredFilter]);
 
-      es.addEventListener("event", (e: MessageEvent) => {
-        attempt = 0; // reset backoff on successful message
-        const entry: EventEntry = JSON.parse(e.data);
-        setEvents((prev: EventEntry[]) => {
-          const next = [...prev, entry];
-          return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next;
-        });
-        setConnected(true);
-      });
-
-      es.addEventListener("sla_warning", (e: MessageEvent) => {
-        onSlaWarning(JSON.parse(e.data));
-      });
-
-      es.onopen = () => {
-        attempt = 0;
-        setConnected(true);
-      };
-
-      es.onerror = () => {
-        setConnected(false);
-        es?.close();
-        es = null;
-        if (!active) return;
-        // Exponential backoff: 1 s → 2 s → 4 s → … capped at 30 s
-        const delay = Math.min(1_000 * 2 ** attempt, 30_000);
-        attempt += 1;
-        reconnectTimer = setTimeout(connect, delay);
-      };
-    }
-
-    connect();
-
-    return () => {
-      active = false;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      es?.close();
-    };
-  }, [sseUrl, onSlaWarning]);
-
-  useEffect(() => {
-    if (autoScroll.current) {
+  React.useEffect(() => {
+    if (autoScroll.current && typeof bottomRef.current?.scrollIntoView === "function") {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [events]);
-
-  const filtered = filter
-    ? events.filter(
-        (e: EventEntry) =>
-          e.eventName.includes(filter) ||
-          e.source.includes(filter) ||
-          (e.correlationId?.includes(filter) ?? false)
-      )
-    : events;
+  }, [filtered]);
 
   return (
-    <section style={styles.section}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>
-          <span style={{ color: connected ? "#3fb950" : "#f85149", marginRight: 8 }}>●</span>
+    <Card className="overflow-hidden">
+      <CardHeader className="flex flex-row items-center gap-3 border-b bg-[#0d1117] py-3">
+        <CardTitle className="flex items-center gap-2 shrink-0">
+          <span
+            className={cn("h-2 w-2 rounded-full", connected ? "bg-[#3fb950]" : "bg-[#f85149]")}
+          />
           Event Log
-          <span style={styles.badge}>{events.length}</span>
-        </h2>
-        <input
-          style={styles.filterInput}
-          placeholder="Filtrar por nombre, servicio…"
+          <Badge variant="secondary" className="ml-2">
+            {events.length}
+          </Badge>
+          <span className={cn("ml-2 text-xs", connected ? "text-green-400" : "text-red-400")}>
+            {connected ? "● conectado" : "○ desconectado"}
+          </span>
+        </CardTitle>
+        <Input
+          placeholder="Filtrar por nombre, servicio, correlationId…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
+          className="ml-auto max-w-md h-8 text-xs"
         />
-      </div>
-
-      <div
-        style={styles.logContainer}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          autoScroll.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
-        }}
-      >
-        {filtered.length === 0 && <p style={styles.empty}>Esperando eventos…</p>}
-        {filtered.map((ev) => (
-          <div key={ev.eventId} style={styles.eventRow}>
-            <span style={styles.timestamp}>{new Date(ev.timestamp).toLocaleTimeString()}</span>
-            <span
-              style={{
-                ...styles.eventName,
-                color: EVENT_COLORS[ev.eventName] ?? "#e6edf3",
-              }}
-            >
-              {ev.eventName}
-            </span>
-            <span style={styles.source}>{ev.source}</span>
-            <span style={styles.correlationId}>{ev.correlationId?.slice(0, 8) || "no-id"}</span>
-            <span style={styles.payload}>{(JSON.stringify(ev.payload) || "").slice(0, 80)}</span>
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    </section>
+        {onClear && (
+          <button onClick={onClear} className="text-xs text-muted-foreground hover:text-foreground">
+            Limpiar
+          </button>
+        )}
+      </CardHeader>
+      <CardContent className="p-0">
+        <div
+          className="h-[380px] overflow-y-auto py-2"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            autoScroll.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
+          }}
+        >
+          {filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Esperando eventos…</p>
+          ) : (
+            filtered.map((ev) => <EventRow key={ev.eventId} ev={ev} />)
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  section: {
-    background: "#161b22",
-    border: "1px solid #30363d",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "12px 16px",
-    borderBottom: "1px solid #30363d",
-    background: "#0d1117",
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: 600,
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    flexShrink: 0,
-  },
-  badge: {
-    background: "#21262d",
-    borderRadius: 10,
-    padding: "1px 8px",
-    fontSize: 11,
-    marginLeft: 8,
-  },
-  filterInput: {
-    background: "#0d1117",
-    border: "1px solid #30363d",
-    borderRadius: 6,
-    color: "#e6edf3",
-    padding: "4px 10px",
-    fontSize: 12,
-    flexGrow: 1,
-    fontFamily: "inherit",
-  },
-  logContainer: {
-    height: 380,
-    overflowY: "auto",
-    padding: "8px 0",
-  },
-  eventRow: {
-    display: "grid",
-    gridTemplateColumns: "80px 200px 120px 90px 1fr",
-    gap: 8,
-    padding: "3px 16px",
-    fontSize: 12,
-    borderBottom: "1px solid #21262d",
-    lineHeight: 1.6,
-  },
-  timestamp: { color: "#6e7681" },
-  eventName: { fontWeight: 600 },
-  source: { color: "#8b949e" },
-  correlationId: { color: "#6e7681", fontFamily: "monospace" },
-  payload: { color: "#8b949e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  empty: { color: "#6e7681", textAlign: "center", padding: 32, fontSize: 13 },
-};

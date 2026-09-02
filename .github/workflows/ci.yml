@@ -32,6 +32,22 @@ jobs:
       - run: npm ci
       - run: npm run type-check --workspaces --if-present
       - run: npm run type-check
+      - name: Type check dashboard
+        run: npm --prefix dashboard ci && npm --prefix dashboard run type-check
+
+  dashboard:
+    name: Dashboard Tests (vitest + msw)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - name: Install dashboard deps
+        run: npm --prefix dashboard ci
+      - name: Run dashboard unit tests
+        run: npm --prefix dashboard test
+      - name: Build dashboard
+        run: npm --prefix dashboard run build
 
   unit:
     name: Unit Tests (vitest + coverage 80%)
