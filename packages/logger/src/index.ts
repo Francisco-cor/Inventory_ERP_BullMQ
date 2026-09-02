@@ -117,9 +117,8 @@ export function createCorrelationHook() {
     // by entering with run. Since Fastify hooks are async, we use correlationStore.enterWith
     // (Node 16+ has enterWith). Fallback to run if not available.
     const ctx: CorrelationContext = { correlationId, requestId };
-    // @ts-expect-error - enterWith may not be in types for older Node, but exists
-    if (typeof (correlationStore as any).enterWith === "function") {
-      (correlationStore as any).enterWith(ctx);
+    if (typeof correlationStore.enterWith === "function") {
+      correlationStore.enterWith(ctx);
     }
     request.correlationId = correlationId;
     request.requestId = requestId;

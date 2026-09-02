@@ -152,7 +152,10 @@ export async function stockRoutes(app: FastifyInstance) {
             timestamp: new Date().toISOString(),
           });
         }
-        requestHash = hashBody({ ...(req.body as object), productoId: (req.params as { productoId: string }).productoId });
+        requestHash = hashBody({
+          ...(req.body as object),
+          productoId: (req.params as { productoId: string }).productoId,
+        });
         const cached = await getIdempotent(idemKey, requestHash);
         if (cached) {
           if ("conflict" in cached) {
@@ -213,8 +216,14 @@ export async function stockRoutes(app: FastifyInstance) {
           [productoId, delta, motivo]
         );
 
-        const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
-        await publishEvent(EVENTS.STOCK_AJUSTADO, { productoId, delta, motivo }, correlationId, client);
+        const correlationId =
+          (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
+        await publishEvent(
+          EVENTS.STOCK_AJUSTADO,
+          { productoId, delta, motivo },
+          correlationId,
+          client
+        );
 
         await client.query("COMMIT");
 

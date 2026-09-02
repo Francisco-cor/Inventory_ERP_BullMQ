@@ -1,5 +1,9 @@
 import { EVENTS } from "@erp/event-bus";
-import type { DomainEvent, StockReservadoPayload, StockInsuficientePayload } from "@erp/shared-types";
+import type {
+  DomainEvent,
+  StockReservadoPayload,
+  StockInsuficientePayload,
+} from "@erp/shared-types";
 import { z } from "zod";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";

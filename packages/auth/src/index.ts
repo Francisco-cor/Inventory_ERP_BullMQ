@@ -36,7 +36,13 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
   await app.register(cors, {
     origin: true,
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Api-Key", "X-Correlation-Id", "Idempotency-Key"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Api-Key",
+      "X-Correlation-Id",
+      "Idempotency-Key",
+    ],
     exposedHeaders: ["X-Correlation-Id", "X-Request-Id"],
   });
 }
@@ -50,10 +56,7 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
  *   - en production: 500 (fail-closed, config error)
  * - Si está configurada: exige header exacto, 401 si falta o es inválida.
  */
-export async function requireApiKey(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function requireApiKey(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const expected = getEnv("ADMIN_API_KEY");
   const nodeEnv = getEnv("NODE_ENV") ?? "development";
 

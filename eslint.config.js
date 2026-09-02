@@ -47,7 +47,24 @@ export default tseslint.config(
       "commitlint.config.js",
       "dashboard/vite.config.ts",
       "dashboard/nginx.conf",
+      "tests/contract/**/*.ts",
+      "tests/load/**/*.js",
+      "tests/e2e/**/*.ts",
+      "services/**/test/**/*.ts",
+      "services/**/src/**/*.spec.ts",
+      "**/vitest.config.ts",
     ],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    files: ["tests/load/**/*.js"],
+    languageOptions: {
+      globals: {
+        __ENV: "readonly",
+        __VU: "readonly",
+        __ITER: "readonly",
+        console: "readonly",
+      },
+    },
   }
 );

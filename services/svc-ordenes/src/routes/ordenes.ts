@@ -288,7 +288,10 @@ export async function ordenesRoutes(app: FastifyInstance) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
-        const { rows: current } = await client.query("SELECT estado FROM ordenes WHERE id = $1 FOR UPDATE", [id]);
+        const { rows: current } = await client.query(
+          "SELECT estado FROM ordenes WHERE id = $1 FOR UPDATE",
+          [id]
+        );
 
         if (current.length === 0) {
           await client.query("ROLLBACK");

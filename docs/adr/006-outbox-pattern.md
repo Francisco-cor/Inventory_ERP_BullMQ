@@ -61,6 +61,7 @@ Se evaluó el patrón Outbox transaccional + relay con `SELECT FOR UPDATE SKIP L
 ## Consecuencias
 
 **Positivas:**
+
 - **Atomicidad:** `INSERT ordenes` + `INSERT outbox` en misma tx → si publish falla, relay reintenta en <500ms (test de crash pasa).
 - **Extensibilidad:** añadir `svc-compras` solo requiere `EVENT_BUS_SERVICES=...,svc-compras` sin recompilar.
 - **Validación fail-fast:** payload inválido en `publish` lanza inmediato, no llega a cola.
@@ -68,6 +69,7 @@ Se evaluó el patrón Outbox transaccional + relay con `SELECT FOR UPDATE SKIP L
 - **Idempotencia correcta:** `svc-ordenes` ya usa `SAVEPOINT` pattern alineado con `svc-stock`.
 
 **Negativas:**
+
 - **Latencia +500ms:** relay poll añade ~250ms media vs publish directo; aceptable para saga `pendiente→confirmada` (<2s req).
 - **Outbox crece:** necesita purge job (Fase 4, `DELETE WHERE published_at < NOW() - 90 days`).
 - **Relay single-thread:** un `setInterval` por instancia, con `SKIP LOCKED` permite múltiples réplicas sin duplicar.

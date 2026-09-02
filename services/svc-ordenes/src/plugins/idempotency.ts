@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import { pool } from "../db/pool.js";
 
 export function hashBody(body: unknown): string {
-  return crypto.createHash("sha256").update(JSON.stringify(body ?? {})).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(body ?? {}))
+    .digest("hex");
 }
 
 export async function getIdempotent(
