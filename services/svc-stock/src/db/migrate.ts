@@ -15,6 +15,11 @@ const migrations = [
     file: "003_alertas_unique.sql",
     downFile: "003_alertas_unique_down.sql",
   },
+  {
+    version: "004_idempotency",
+    file: "004_idempotency.sql",
+    downFile: "004_idempotency_down.sql",
+  },
 ];
 
 export async function runMigrations(client: pg.Client): Promise<void> {

@@ -22,6 +22,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
+    "openapi:generate": "bash scripts/generate-openapi.sh",
     "prepare": "husky"
   },
   "engines": {

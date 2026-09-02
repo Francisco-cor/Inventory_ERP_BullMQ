@@ -1,12 +1,31 @@
 import { EVENTS } from "@erp/event-bus";
-import type {
-  DomainEvent,
-  StockReservadoPayload,
-  StockInsuficientePayload,
-} from "@erp/shared-types";
+import type { DomainEvent, StockReservadoPayload, StockInsuficientePayload } from "@erp/shared-types";
+import { z } from "zod";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
 import { eventBus } from "./bus.js";
+
+const StockReservadoSchema = z.object({
+  ordenId: z.string().uuid(),
+  items: z.array(z.object({ productoId: z.string().uuid(), cantidad: z.number().int().min(1) })),
+});
+
+const StockInsuficienteSchema = z.object({
+  ordenId: z.string().uuid(),
+  sku: z.string().min(1),
+  disponible: z.number().int().min(0),
+  requerido: z.number().int().min(1),
+});
+
+function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName: string): T {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(
+      `ValidationError: payload inválido para ${eventName}: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`
+    );
+  }
+  return parsed.data;
+}
 
 async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
   const { rowCount } = await pool.query(
@@ -18,6 +37,7 @@ async function isAlreadyProcessed(eventId: string, eventName: string): Promise<b
 
 // stock.reservado → confirmar orden + emitir orden.confirmada
 async function onStockReservado(event: DomainEvent<StockReservadoPayload>): Promise<void> {
+  validateOrThrow(StockReservadoSchema, event.payload, event.name);
   if (await isAlreadyProcessed(event.id, event.name)) {
     console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
     return;
@@ -47,6 +67,7 @@ async function onStockReservado(event: DomainEvent<StockReservadoPayload>): Prom
 
 // stock.insuficiente → cancelar orden
 async function onStockInsuficiente(event: DomainEvent<StockInsuficientePayload>): Promise<void> {
+  validateOrThrow(StockInsuficienteSchema, event.payload, event.name);
   if (await isAlreadyProcessed(event.id, event.name)) {
     console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
     return;

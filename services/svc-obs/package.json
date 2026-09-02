@@ -11,10 +11,12 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
+    "@erp/auth": "*",
     "@erp/env": "*",
     "@erp/event-bus": "*",
     "@erp/shared-types": "*",
     "@fastify/cors": "^10.0.0",
+    "@fastify/helmet": "^13.0.0",
     "@fastify/rate-limit": "^10.1.0",
     "bullmq": "^5.0.0",
     "fastify": "^5.0.0",

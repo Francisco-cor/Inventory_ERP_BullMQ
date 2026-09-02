@@ -7,6 +7,7 @@ COPY package.json package-lock.json* tsconfig.base.json ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/event-bus/package.json ./packages/event-bus/
 COPY packages/env/package.json ./packages/env/
+COPY packages/auth/package.json ./packages/auth/
 COPY services/svc-stock/package.json ./services/svc-stock/
 RUN npm ci --workspaces --include-workspace-root
 
@@ -17,6 +18,8 @@ COPY packages/event-bus ./packages/event-bus
 RUN npm run build --workspace=packages/event-bus
 COPY packages/env ./packages/env
 RUN npm run build --workspace=@erp/env
+COPY packages/auth ./packages/auth
+RUN npm run build --workspace=@erp/auth
 
 FROM build-shared AS build-svc
 COPY services/svc-stock ./services/svc-stock
@@ -31,6 +34,8 @@ COPY --from=build-shared /app/packages/event-bus/dist ./packages/event-bus/dist
 COPY --from=build-shared /app/packages/event-bus/package.json ./packages/event-bus/
 COPY --from=build-shared /app/packages/env/dist ./packages/env/dist
 COPY --from=build-shared /app/packages/env/package.json ./packages/env/
+COPY --from=build-shared /app/packages/auth/dist ./packages/auth/dist
+COPY --from=build-shared /app/packages/auth/package.json ./packages/auth/
 COPY --from=build-svc    /app/services/svc-stock/dist ./services/svc-stock/dist
 COPY --from=build-svc    /app/services/svc-stock/migrations ./services/svc-stock/migrations
 COPY --from=build-svc    /app/services/svc-stock/package.json ./services/svc-stock/

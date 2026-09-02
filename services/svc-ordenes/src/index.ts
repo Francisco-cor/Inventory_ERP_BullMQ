@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
+import { registerSecurity } from "@erp/auth";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { ordenesRoutes } from "./routes/ordenes.js";
@@ -33,6 +34,8 @@ async function bootstrap() {
   } finally {
     await client.end();
   }
+
+  await registerSecurity(app);
 
   await app.register(rateLimit, {
     global: true,
@@ -68,6 +71,7 @@ async function bootstrap() {
   await registerSwagger(app);
   await app.register(healthRoutes);
   await app.register(ordenesRoutes, { prefix: "/api/v1/ordenes" });
+  await app.register(ordenesRoutes, { prefix: "/api/v1/orders" });
   await app.register(adminRoutes, { prefix: "/admin" });
 
   await startEventConsumer();

@@ -1,7 +1,7 @@
 import Fastify from "fastify";
-import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
+import { registerSecurity } from "@erp/auth";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { healthRoutes } from "./routes/health.js";
@@ -37,7 +37,7 @@ async function bootstrap(): Promise<void> {
     await client.end();
   }
 
-  await app.register(cors, { origin: true });
+  await registerSecurity(app);
 
   await app.register(rateLimit, {
     global: true,

@@ -1,11 +1,49 @@
 import { EVENTS } from "@erp/event-bus";
 import type { DomainEvent, OrdenCreadaPayload, OrdenCanceladaPayload } from "@erp/shared-types";
 import type { PoolClient } from "pg";
+import { z } from "zod";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
 import { eventBus } from "./bus.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
+
+const OrdenCreadaSchema = z.object({
+  orden: z.object({
+    id: z.string().uuid(),
+    estado: z.string(),
+    lineas: z.array(
+      z.object({
+        productoId: z.string().uuid(),
+        sku: z.string().min(1),
+        cantidad: z.number().int().min(1),
+        precioUnitario: z.number().min(0),
+      })
+    ),
+    total: z.number().min(0),
+    creadaEn: z.string(),
+    actualizadaEn: z.string().optional(),
+  }),
+});
+
+const OrdenCanceladaSchema = z.object({
+  ordenId: z.string().uuid(),
+  motivo: z.string().optional(),
+});
+
+const ProductoCreadoSchema = z.object({
+  producto: z.object({ id: z.string().uuid(), sku: z.string().min(1) }),
+});
+
+function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName: string): T {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(
+      `ValidationError: payload inválido para ${eventName}: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`
+    );
+  }
+  return parsed.data;
+}
 
 // Inserts the event id inside an active transaction so that a rollback also
 // reverts the idempotency record, preventing events from being silently
@@ -24,6 +62,7 @@ async function isAlreadyProcessed(
 
 // orden.creada → intentar reservar stock
 async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<void> {
+  validateOrThrow(OrdenCreadaSchema, event.payload, event.name);
   const { orden } = event.payload;
   const client = await pool.connect();
 
@@ -153,6 +192,7 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
 
 // orden.cancelada → liberar reservas
 async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Promise<void> {
+  validateOrThrow(OrdenCanceladaSchema, event.payload, event.name);
   const { ordenId } = event.payload;
   const client = await pool.connect();
 
@@ -223,6 +263,7 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
 async function onProductoCreado(
   event: DomainEvent<{ producto: { id: string; sku: string } }>
 ): Promise<void> {
+  validateOrThrow(ProductoCreadoSchema, event.payload, event.name);
   const { producto } = event.payload;
   const client = await pool.connect();
 

@@ -5,9 +5,40 @@ import type {
   OrdenConfirmadaPayload,
   OrdenCanceladaPayload,
 } from "@erp/shared-types";
+import { z } from "zod";
 import { pool } from "../db/pool.js";
 import { eventBus } from "./bus.js";
 import { broadcast } from "../sse/broker.js";
+
+const OrdenCreadaSchema = z.object({
+  orden: z.object({
+    id: z.string().uuid(),
+    estado: z.string(),
+    lineas: z.array(
+      z.object({
+        productoId: z.string().uuid(),
+        sku: z.string(),
+        cantidad: z.number().int().min(1),
+        precioUnitario: z.number().min(0),
+      })
+    ),
+    total: z.number(),
+    creadaEn: z.string(),
+  }),
+});
+
+const OrdenConfirmadaSchema = z.object({ ordenId: z.string().uuid(), confirmadaEn: z.string() });
+const OrdenCanceladaSchema = z.object({ ordenId: z.string().uuid(), motivo: z.string().optional() });
+
+function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName: string): T {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(
+      `ValidationError: payload inválido para ${eventName}: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`
+    );
+  }
+  return parsed.data;
+}
 
 async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
   const { rowCount } = await pool.query(
@@ -54,6 +85,7 @@ async function storeAndBroadcast(event: DomainEvent): Promise<boolean> {
 }
 
 async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<void> {
+  validateOrThrow(OrdenCreadaSchema, event.payload, event.name);
   if (!(await storeAndBroadcast(event))) return;
 
   const client = await pool.connect();
@@ -70,6 +102,7 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
 }
 
 async function onOrdenConfirmada(event: DomainEvent<OrdenConfirmadaPayload>): Promise<void> {
+  validateOrThrow(OrdenConfirmadaSchema, event.payload, event.name);
   if (!(await storeAndBroadcast(event))) return;
 
   const client = await pool.connect();
@@ -86,6 +119,7 @@ async function onOrdenConfirmada(event: DomainEvent<OrdenConfirmadaPayload>): Pr
 }
 
 async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Promise<void> {
+  validateOrThrow(OrdenCanceladaSchema, event.payload, event.name);
   if (!(await storeAndBroadcast(event))) return;
 
   const client = await pool.connect();
@@ -103,6 +137,9 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
 
 // Generic handler for all other events (just store + broadcast)
 async function onAnyEvent(event: DomainEvent): Promise<void> {
+  if (!event.payload || typeof event.payload !== "object") {
+    throw new Error(`ValidationError: payload inválido para ${event.name}: debe ser objeto`);
+  }
   await storeAndBroadcast(event);
 }
 

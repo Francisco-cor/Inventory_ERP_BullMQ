@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
+import { registerSecurity } from "@erp/auth";
 import { pool, waitForDatabase } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 import { productosRoutes } from "./routes/productos.js";
@@ -34,7 +35,10 @@ async function bootstrap() {
     await client.end();
   }
 
-  // 2. Rate limiting
+  // 2. Security (helmet + cors) — must be first
+  await registerSecurity(app);
+
+  // 3. Rate limiting
   await app.register(rateLimit, {
     global: true,
     max: 200,
@@ -47,7 +51,7 @@ async function bootstrap() {
     }),
   });
 
-  // 3. Centralized error handler
+  // 4. Centralized error handler
   app.setErrorHandler((err, _req, reply) => {
     const e = err as { validation?: unknown; message?: string };
     if (e.validation) {
@@ -67,15 +71,17 @@ async function bootstrap() {
     });
   });
 
-  // 4. Register OpenAPI / Swagger
+  // 5. Register OpenAPI / Swagger
   await registerSwagger(app);
 
-  // 5. Register routes
+  // 6. Register routes
   await app.register(healthRoutes);
   await app.register(productosRoutes, { prefix: "/api/v1/productos" });
+  // Alias en inglés para compatibilidad README/docs — mismo handler, distinto prefix
+  await app.register(productosRoutes, { prefix: "/api/v1/products" });
   await app.register(adminRoutes, { prefix: "/admin" });
 
-  // 6. Start server
+  // 7. Start server
   await app.listen({ port: PORT, host: HOST });
   app.log.info(`svc-productos listening on http://${HOST}:${PORT}`);
   app.log.info(`Swagger UI: http://${HOST}:${PORT}/docs`);

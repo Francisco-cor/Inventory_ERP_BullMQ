@@ -21,6 +21,7 @@ const BaseEnvSchema = z.object({
   REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   ADMIN_API_KEY: z.string().optional(),
+  JWT_SECRET: z.string().min(16, "JWT_SECRET debe tener al menos 16 caracteres").optional(),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
 
   // Servicio stock
@@ -29,6 +30,14 @@ const BaseEnvSchema = z.object({
   // Servicio obs
   SLA_THRESHOLD_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
   SLA_CHECK_INTERVAL_MS: z.coerce.number().int().min(1000).max(600000).default(30000),
+}).superRefine((data, ctx) => {
+  if (data.NODE_ENV === "production" && !data.ADMIN_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["ADMIN_API_KEY"],
+      message: "ADMIN_API_KEY es requerido en production (fail-closed)",
+    });
+  }
 });
 
 export type Env = z.infer<typeof BaseEnvSchema>;

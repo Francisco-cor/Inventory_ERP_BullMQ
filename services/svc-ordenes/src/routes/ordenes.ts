@@ -5,6 +5,7 @@ import { publishEvent, EVENTS } from "../events/publisher.js";
 import { CrearOrdenSchema } from "../domain/orden.schema.js";
 import { type EstadoOrden, puedeTransicionar, describir } from "../domain/orden.statemachine.js";
 import { requireApiKey } from "../plugins/auth.js";
+import { getIdempotent, hashBody, saveIdempotent } from "../plugins/idempotency.js";
 
 export async function ordenesRoutes(app: FastifyInstance) {
   // GET /api/v1/ordenes
@@ -130,6 +131,14 @@ export async function ordenesRoutes(app: FastifyInstance) {
       schema: {
         tags: ["ordenes"],
         summary: "Crear una nueva orden",
+        headers: {
+          type: "object",
+          properties: {
+            "idempotency-key": { type: "string", minLength: 8, maxLength: 64 },
+            "x-api-key": { type: "string" },
+            "x-correlation-id": { type: "string" },
+          },
+        },
         body: {
           type: "object",
           required: ["lineas"],
@@ -153,6 +162,33 @@ export async function ordenesRoutes(app: FastifyInstance) {
       },
     },
     async (req, reply) => {
+      // Idempotency-Key handling
+      const idemKey = (req.headers["idempotency-key"] as string | undefined)?.trim();
+      let requestHash = "";
+      if (idemKey) {
+        if (idemKey.length < 8 || idemKey.length > 64) {
+          return reply.status(400).send({
+            error: "ValidationError",
+            message: "Idempotency-Key debe tener entre 8 y 64 caracteres",
+            statusCode: 400,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        requestHash = hashBody(req.body);
+        const cached = await getIdempotent(idemKey, requestHash);
+        if (cached) {
+          if ("conflict" in cached) {
+            return reply.status(422).send({
+              error: "IdempotencyConflict",
+              message: "Idempotency-Key ya usada con diferente payload",
+              statusCode: 422,
+              timestamp: new Date().toISOString(),
+            });
+          }
+          return reply.status(cached.status).send(cached.body);
+        }
+      }
+
       const parsed = CrearOrdenSchema.safeParse(req.body);
       if (!parsed.success) {
         const message = parsed.error.issues
@@ -207,7 +243,13 @@ export async function ordenesRoutes(app: FastifyInstance) {
           correlationId
         );
 
-        return reply.status(201).send({ data: orden });
+        const responseBody = { data: orden };
+        if (idemKey) {
+          await saveIdempotent(idemKey, requestHash, 201, responseBody).catch((e) =>
+            req.log.warn({ err: e }, "[idempotency] failed to save key")
+          );
+        }
+        return reply.status(201).send(responseBody);
       } catch (err) {
         await client.query("ROLLBACK");
         throw err;

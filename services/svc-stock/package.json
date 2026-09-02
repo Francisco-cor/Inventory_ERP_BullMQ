@@ -15,9 +15,12 @@
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "@erp/auth": "*",
     "@erp/env": "*",
     "@erp/event-bus": "*",
     "@erp/shared-types": "*",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/helmet": "^13.0.0",
     "@fastify/rate-limit": "^10.1.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
