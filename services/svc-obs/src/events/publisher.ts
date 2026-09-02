@@ -6,11 +6,6 @@ import type { PoolClient } from "pg";
 
 export { EVENTS };
 
-/**
- * Publicación transaccional vía outbox.
- * Si se pasa `client` (dentro de una transacción), el INSERT va en esa tx.
- * Si no, usa pool y la relay lo publicará en <500ms.
- */
 export async function publishEvent<T>(
   name: EventName,
   payload: T,
@@ -23,16 +18,9 @@ export async function publishEvent<T>(
   const payloadJson = JSON.stringify(payload);
 
   const doInsert = async (c: PoolClient | typeof pool) => {
-    // outbox es la fuente de verdad para el relay
     await c.query(
       `INSERT INTO outbox (id, nombre_evento, payload, correlation_id)
        VALUES ($1, $2, $3, $4)`,
-      [eventId, name, payloadJson, corr]
-    );
-    // auditoría local (best-effort)
-    await c.query(
-      `INSERT INTO eventos_emitidos (id, nombre_evento, payload, correlation_id, estado)
-       VALUES ($1, $2, $3, $4, 'emitido')`,
       [eventId, name, payloadJson, corr]
     );
   };

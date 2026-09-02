@@ -122,19 +122,27 @@ export async function productosRoutes(app: FastifyInstance) {
 
       const { sku, nombre, descripcion, precio, unidad } = parsed.data;
       const id = randomUUID();
+      const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
-      const { rows } = await pool.query(
-        `INSERT INTO productos (id, sku, nombre, descripcion, precio, unidad)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [id, sku, nombre, descripcion ?? null, precio, unidad]
-      );
-
-      const producto = rows[0];
-
-      await publishEvent("producto.creado", { producto });
-
-      return reply.status(201).send({ data: producto });
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows } = await client.query(
+          `INSERT INTO productos (id, sku, nombre, descripcion, precio, unidad)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [id, sku, nombre, descripcion ?? null, precio, unidad]
+        );
+        const producto = rows[0];
+        await publishEvent("producto.creado", { producto }, correlationId, client);
+        await client.query("COMMIT");
+        return reply.status(201).send({ data: producto });
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
     }
   );
 
@@ -192,26 +200,42 @@ export async function productosRoutes(app: FastifyInstance) {
       }
 
       values.push(id);
-      const { rows } = await pool.query(
-        `UPDATE productos SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING *`,
-        values
-      );
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows } = await client.query(
+          `UPDATE productos SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING *`,
+          values
+        );
 
-      if (rows.length === 0) {
-        return reply.status(404).send({
-          error: "NotFound",
-          message: `Producto ${id} no encontrado`,
-          statusCode: 404,
-          timestamp: new Date().toISOString(),
-        });
+        if (rows.length === 0) {
+          await client.query("ROLLBACK");
+          return reply.status(404).send({
+            error: "NotFound",
+            message: `Producto ${id} no encontrado`,
+            statusCode: 404,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        await publishEvent(
+          "producto.actualizado",
+          {
+            productoId: id,
+            cambios,
+          },
+          (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID(),
+          client
+        );
+
+        await client.query("COMMIT");
+        return { data: rows[0] };
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
       }
-
-      await publishEvent("producto.actualizado", {
-        productoId: id,
-        cambios,
-      });
-
-      return { data: rows[0] };
     }
   );
 
@@ -232,24 +256,34 @@ export async function productosRoutes(app: FastifyInstance) {
     },
     async (req, reply) => {
       const { id } = req.params as { id: string };
+      const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows } = await client.query(
+          "UPDATE productos SET activo = false WHERE id = $1 AND activo = true RETURNING id",
+          [id]
+        );
 
-      const { rows } = await pool.query(
-        "UPDATE productos SET activo = false WHERE id = $1 AND activo = true RETURNING id",
-        [id]
-      );
+        if (rows.length === 0) {
+          await client.query("ROLLBACK");
+          return reply.status(404).send({
+            error: "NotFound",
+            message: `Producto ${id} no encontrado o ya estaba inactivo`,
+            statusCode: 404,
+            timestamp: new Date().toISOString(),
+          });
+        }
 
-      if (rows.length === 0) {
-        return reply.status(404).send({
-          error: "NotFound",
-          message: `Producto ${id} no encontrado o ya estaba inactivo`,
-          statusCode: 404,
-          timestamp: new Date().toISOString(),
-        });
+        await publishEvent("producto.eliminado", { productoId: id }, correlationId, client);
+        await client.query("COMMIT");
+        return reply.status(204).send();
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
       }
-
-      await publishEvent("producto.eliminado", { productoId: id });
-
-      return reply.status(204).send();
     }
   );
 }

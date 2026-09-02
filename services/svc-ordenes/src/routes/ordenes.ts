@@ -226,8 +226,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
           );
         }
 
-        await client.query("COMMIT");
-
+        // Outbox: publish dentro de la misma tx (fail-safe)
         await publishEvent(
           EVENTS.ORDEN_CREADA,
           {
@@ -240,8 +239,11 @@ export async function ordenesRoutes(app: FastifyInstance) {
               actualizadaEn: orden.actualizada_en,
             },
           },
-          correlationId
+          correlationId,
+          client
         );
+
+        await client.query("COMMIT");
 
         const responseBody = { data: orden };
         if (idemKey) {
@@ -283,47 +285,59 @@ export async function ordenesRoutes(app: FastifyInstance) {
       const { motivo } = (req.body as { motivo?: string }) ?? {};
       const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
 
-      // Fetch current state to validate transition explicitly
-      const { rows: current } = await pool.query("SELECT estado FROM ordenes WHERE id = $1", [id]);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const { rows: current } = await client.query("SELECT estado FROM ordenes WHERE id = $1 FOR UPDATE", [id]);
 
-      if (current.length === 0) {
-        return reply.status(404).send({
-          error: "NotFound",
-          message: `Orden ${id} no encontrada`,
-          statusCode: 404,
-          timestamp: new Date().toISOString(),
-        });
+        if (current.length === 0) {
+          await client.query("ROLLBACK");
+          return reply.status(404).send({
+            error: "NotFound",
+            message: `Orden ${id} no encontrada`,
+            statusCode: 404,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const estadoActual = current[0].estado as EstadoOrden;
+        if (!puedeTransicionar(estadoActual, "cancelada")) {
+          await client.query("ROLLBACK");
+          return reply.status(409).send({
+            error: "Conflict",
+            message: `No se puede cancelar la orden. ${describir(estadoActual)}`,
+            statusCode: 409,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const { rows } = await client.query(
+          `UPDATE ordenes SET estado = 'cancelada', actualizada_en = NOW()
+           WHERE id = $1 AND estado = $2
+           RETURNING *`,
+          [id, estadoActual]
+        );
+
+        if (rows.length === 0) {
+          await client.query("ROLLBACK");
+          return reply.status(409).send({
+            error: "Conflict",
+            message: `Estado de la orden cambió durante el procesamiento. Intente de nuevo.`,
+            statusCode: 409,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        await publishEvent(EVENTS.ORDEN_CANCELADA, { ordenId: id, motivo }, correlationId, client);
+
+        await client.query("COMMIT");
+        return { data: rows[0] };
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
       }
-
-      const estadoActual = current[0].estado as EstadoOrden;
-      if (!puedeTransicionar(estadoActual, "cancelada")) {
-        return reply.status(409).send({
-          error: "Conflict",
-          message: `No se puede cancelar la orden. ${describir(estadoActual)}`,
-          statusCode: 409,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const { rows } = await pool.query(
-        `UPDATE ordenes SET estado = 'cancelada', actualizada_en = NOW()
-         WHERE id = $1 AND estado = $2
-         RETURNING *`,
-        [id, estadoActual]
-      );
-
-      if (rows.length === 0) {
-        return reply.status(409).send({
-          error: "Conflict",
-          message: `Estado de la orden cambió durante el procesamiento. Intente de nuevo.`,
-          statusCode: 409,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      await publishEvent(EVENTS.ORDEN_CANCELADA, { ordenId: id, motivo }, correlationId);
-
-      return { data: rows[0] };
     }
   );
 }

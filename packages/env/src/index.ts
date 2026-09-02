@@ -27,6 +27,10 @@ const BaseEnvSchema = z.object({
   // Servicio stock
   STOCK_ALERTA_UMBRAL: z.coerce.number().int().min(1).max(1000).default(10),
 
+  // Event bus
+  EVENT_BUS_SERVICES: z.string().optional(),
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(10000).default(500),
+
   // Servicio obs
   SLA_THRESHOLD_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
   SLA_CHECK_INTERVAL_MS: z.coerce.number().int().min(1000).max(600000).default(30000),

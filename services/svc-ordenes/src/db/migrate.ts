@@ -10,6 +10,7 @@ const migrationsDir = join(__dirname, "../../migrations");
 const migrations = [
   { version: "001_initial", file: "001_initial.sql", downFile: "001_initial_down.sql" },
   { version: "002_idempotency", file: "002_idempotency.sql", downFile: "002_idempotency_down.sql" },
+  { version: "003_outbox", file: "003_outbox.sql", downFile: "003_outbox_down.sql" },
 ];
 
 export async function runMigrations(client: pg.Client): Promise<void> {

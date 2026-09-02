@@ -20,6 +20,7 @@ const migrations = [
     file: "004_idempotency.sql",
     downFile: "004_idempotency_down.sql",
   },
+  { version: "005_outbox", file: "005_outbox.sql", downFile: "005_outbox_down.sql" },
 ];
 
 export async function runMigrations(client: pg.Client): Promise<void> {

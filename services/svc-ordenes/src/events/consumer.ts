@@ -27,8 +27,12 @@ function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName:
   return parsed.data;
 }
 
-async function isAlreadyProcessed(eventId: string, eventName: string): Promise<boolean> {
-  const { rowCount } = await pool.query(
+async function isAlreadyProcessed(
+  client: import("pg").PoolClient,
+  eventId: string,
+  eventName: string
+): Promise<boolean> {
+  const { rowCount } = await client.query(
     "INSERT INTO eventos_recibidos (event_id, nombre_evento) VALUES ($1, $2) ON CONFLICT (event_id) DO NOTHING",
     [eventId, eventName]
   );
@@ -38,14 +42,17 @@ async function isAlreadyProcessed(eventId: string, eventName: string): Promise<b
 // stock.reservado → confirmar orden + emitir orden.confirmada
 async function onStockReservado(event: DomainEvent<StockReservadoPayload>): Promise<void> {
   validateOrThrow(StockReservadoSchema, event.payload, event.name);
-  if (await isAlreadyProcessed(event.id, event.name)) {
-    console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
-    return;
-  }
 
   const { ordenId } = event.payload;
   const client = await pool.connect();
   try {
+    await client.query("BEGIN");
+    if (await isAlreadyProcessed(client, event.id, event.name)) {
+      await client.query("COMMIT");
+      console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
+      return;
+    }
+
     const { rowCount } = await client.query(
       `UPDATE ordenes SET estado = 'confirmada', actualizada_en = NOW()
        WHERE id = $1 AND estado = 'pendiente'`,
@@ -56,10 +63,15 @@ async function onStockReservado(event: DomainEvent<StockReservadoPayload>): Prom
       await publishEvent(
         EVENTS.ORDEN_CONFIRMADA,
         { ordenId, confirmadaEn: new Date().toISOString() },
-        event.correlationId
+        event.correlationId,
+        client
       );
       console.log(`[consumer:ordenes] Orden ${ordenId} confirmada`);
     }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
   } finally {
     client.release();
   }
@@ -68,14 +80,17 @@ async function onStockReservado(event: DomainEvent<StockReservadoPayload>): Prom
 // stock.insuficiente → cancelar orden
 async function onStockInsuficiente(event: DomainEvent<StockInsuficientePayload>): Promise<void> {
   validateOrThrow(StockInsuficienteSchema, event.payload, event.name);
-  if (await isAlreadyProcessed(event.id, event.name)) {
-    console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
-    return;
-  }
 
   const { ordenId, sku } = event.payload;
   const client = await pool.connect();
   try {
+    await client.query("BEGIN");
+    if (await isAlreadyProcessed(client, event.id, event.name)) {
+      await client.query("COMMIT");
+      console.log(`[consumer:ordenes] Skipping duplicate ${event.id}`);
+      return;
+    }
+
     const { rowCount } = await client.query(
       `UPDATE ordenes SET estado = 'cancelada', actualizada_en = NOW()
        WHERE id = $1 AND estado = 'pendiente'`,
@@ -86,10 +101,15 @@ async function onStockInsuficiente(event: DomainEvent<StockInsuficientePayload>)
       await publishEvent(
         EVENTS.ORDEN_CANCELADA,
         { ordenId, motivo: `Stock insuficiente para SKU ${sku}` },
-        event.correlationId
+        event.correlationId,
+        client
       );
       console.log(`[consumer:ordenes] Orden ${ordenId} cancelada — stock insuficiente (${sku})`);
     }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
   } finally {
     client.release();
   }

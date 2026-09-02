@@ -9,6 +9,7 @@ import { obsRoutes } from "./routes/obs.js";
 import { adminRoutes } from "./routes/admin.js";
 import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
+import { startOutboxRelay, stopOutboxRelay } from "./jobs/outbox-relay.js";
 import { startSlaChecker, stopSlaChecker } from "./jobs/sla-checker.js";
 
 const PORT = Number(process.env.PORT ?? 3004);
@@ -65,7 +66,25 @@ async function bootstrap(): Promise<void> {
   await app.register(obsRoutes, { prefix: "/api/v1/obs" });
   await app.register(adminRoutes, { prefix: "/admin" });
 
+  try {
+    const { createBullBoard } = await import("@bull-board/api");
+    const { BullMQAdapter } = await import("@bull-board/api/bullMQAdapter");
+    const { FastifyAdapter } = await import("@bull-board/fastify");
+    const { Queue } = await import("bullmq");
+    const serverAdapter = new FastifyAdapter();
+    serverAdapter.setBasePath("/admin/queues");
+    const q = new Queue("events-svc-obs", {
+      connection: { host: process.env.REDIS_HOST ?? "redis", port: Number(process.env.REDIS_PORT ?? 6379) },
+    });
+    createBullBoard({ queues: [new BullMQAdapter(q)], serverAdapter });
+    await app.register(serverAdapter.registerPlugin(), { prefix: "/admin/queues" });
+    app.log.info("Bull Board registered at /admin/queues");
+  } catch (e) {
+    app.log.warn({ err: e }, "Bull Board not available");
+  }
+
   startEventConsumer();
+  startOutboxRelay();
   await startSlaChecker({ host: REDIS_HOST, port: REDIS_PORT });
 
   await app.listen({ port: PORT, host: HOST });
@@ -79,6 +98,7 @@ bootstrap().catch((err) => {
 });
 
 process.on("SIGTERM", async () => {
+  await stopOutboxRelay();
   await stopSlaChecker();
   await app.close();
   await eventBus.close();

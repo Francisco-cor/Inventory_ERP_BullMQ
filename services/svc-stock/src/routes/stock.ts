@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { publishEvent, EVENTS } from "../events/publisher.js";
 import { requireApiKey } from "../plugins/auth.js";
@@ -212,11 +213,12 @@ export async function stockRoutes(app: FastifyInstance) {
           [productoId, delta, motivo]
         );
 
+        const correlationId = (req.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
+        await publishEvent(EVENTS.STOCK_AJUSTADO, { productoId, delta, motivo }, correlationId, client);
+
         await client.query("COMMIT");
 
-        await publishEvent(EVENTS.STOCK_AJUSTADO, { productoId, delta, motivo });
-
-        // Registrar alerta si el stock disponible cae bajo el umbral
+        // Registrar alerta si el stock disponible cae bajo el umbral (usa outbox via pool, no necesita tx)
         await registrarAlertaSiCorresponde(productoId, updated[0].sku, updated[0].disponible);
 
         const responseBody = { data: updated[0] };

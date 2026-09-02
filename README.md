@@ -302,4 +302,5 @@ See `.github/workflows/ci.yml`.
 - [ADR #003](docs/adr/003-event-bus-vs-http.md) — Event bus vs synchronous HTTP
 - [ADR #004](docs/adr/004-tooling-dx.md) — Tooling y DX unificados (Fase 1)
 - [ADR #005](docs/adr/005-seguridad-por-capas.md) — Seguridad por capas (Fase 2)
+- [ADR #006](docs/adr/006-outbox-pattern.md) — Outbox transaccional y relay (Fase 3)
 - [Threat Model](docs/threat-model.md) — STRIDE y flujos críticos
