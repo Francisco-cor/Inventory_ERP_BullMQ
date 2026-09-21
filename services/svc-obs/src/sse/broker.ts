@@ -89,7 +89,8 @@ export async function initSseBroker(opts?: {
   }
 }
 
-export function addClient(res: ServerResponse): string {
+export function addClient(res: ServerResponse, maxClients = 100): string | null {
+  if (clients.size >= maxClients) return null;
   const id = randomUUID();
   clients.set(id, res);
   return id;

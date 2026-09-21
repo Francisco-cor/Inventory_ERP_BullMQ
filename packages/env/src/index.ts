@@ -44,7 +44,9 @@ const BaseEnvSchema = z
     // Servicio obs
     SLA_THRESHOLD_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
     SLA_CHECK_INTERVAL_MS: z.coerce.number().int().min(1000).max(600000).default(30000),
+    SLA_LOCK_TTL_MS: z.coerce.number().int().min(10000).max(3600000).default(120000),
     SSE_ADAPTER: z.enum(["memory", "redis"]).default("memory"),
+    SSE_MAX_CLIENTS: z.coerce.number().int().min(1).max(10000).default(100),
     HEALTH_AGGREGATE_TIMEOUT_MS: z.coerce.number().int().min(500).max(10000).default(2000),
 
     // Observabilidad (OTEL)

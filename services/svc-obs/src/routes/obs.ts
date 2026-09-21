@@ -1,18 +1,42 @@
 import type { FastifyInstance } from "fastify";
 import { pool } from "../db/pool.js";
-import { addClient, removeClient } from "../sse/broker.js";
+import { addClient, clientCount, removeClient } from "../sse/broker.js";
+import { config } from "../config.js";
+
+function parsePositiveInt(value: string | undefined, fallback: number, max: number): number | null {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isInteger(parsed) || parsed < 1) return null;
+  return Math.min(parsed, max);
+}
 
 export async function obsRoutes(app: FastifyInstance): Promise<void> {
   // ── SSE stream ─────────────────────────────────────────────────────────────
   app.get("/events/stream", async (req, reply) => {
+    if (clientCount() >= config.SSE_MAX_CLIENTS) {
+      return reply.status(503).send({
+        error: "SseCapacityExceeded",
+        message: "Se alcanzó el máximo de conexiones SSE. Intente más tarde.",
+        statusCode: 503,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const res = reply.raw;
+    const clientId = addClient(res, config.SSE_MAX_CLIENTS);
+    if (!clientId) {
+      return reply.status(503).send({
+        error: "SseCapacityExceeded",
+        message: "Se alcanzó el máximo de conexiones SSE. Intente más tarde.",
+        statusCode: 503,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
     res.flushHeaders();
-
-    const clientId = addClient(res);
 
     // Send recent events so the client has initial data
     try {
@@ -72,8 +96,16 @@ export async function obsRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (req, reply) => {
-      const page = Math.max(1, Number(req.query.page ?? 1));
-      const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 50)));
+      const page = parsePositiveInt(req.query.page, 1, 1_000_000);
+      const pageSize = parsePositiveInt(req.query.pageSize, 50, 100);
+      if (page === null || pageSize === null) {
+        return reply.status(400).send({
+          error: "ValidationError",
+          message: "page y pageSize deben ser enteros positivos",
+          statusCode: 400,
+          timestamp: new Date().toISOString(),
+        });
+      }
       const offset = (page - 1) * pageSize;
 
       const conditions: string[] = [];

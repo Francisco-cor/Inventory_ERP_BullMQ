@@ -59,20 +59,21 @@ jobs:
           node-version: "20"
           cache: "npm"
       - run: npm ci
-      - name: Run unit tests with coverage (services)
+      - name: Run unit tests and coverage (covered domain suites)
         run: |
           npm run test --workspace=@erp/svc-ordenes -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests
           npm run test --workspace=@erp/svc-productos -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests
-          npm run test --workspace=@erp/svc-stock -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests || true
-          npm run test --workspace=@erp/svc-obs -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests || true
-          npx vitest run tests/contract --run --passWithNoTests || true
-      - name: Check coverage thresholds (80% domain)
+          npm run test --workspace=@erp/svc-stock -- --coverage --coverage.reportsDirectory=coverage
+          # svc-obs has no unit suite yet; keep it explicit and non-covered.
+          npm run test --workspace=@erp/svc-obs
+          npx vitest run tests/contract --run --passWithNoTests
+      - name: Check coverage artifacts (80% domain suites)
         run: |
           echo "Checking coverage thresholds..."
-          # vitest already fails if thresholds <80 per vitest.config.ts
-          # Also check lcov exists
-          ls -lh services/*/coverage/lcov.info || true
-          cat services/svc-ordenes/coverage/coverage-summary.json | grep -E "lines.*80" || true
+          # Vitest already fails if thresholds <80 per each covered suite config.
+          test -f services/svc-ordenes/coverage/lcov.info
+          test -f services/svc-productos/coverage/lcov.info
+          test -f services/svc-stock/coverage/lcov.info
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v4
@@ -95,9 +96,9 @@ jobs:
       - run: npm ci
       - name: Run integration tests
         run: |
-          npm run test --workspace=@erp/svc-ordenes -- --run test/integration --passWithNoTests || true
-          npm run test --workspace=@erp/svc-stock -- --run test/integration --passWithNoTests || true
-          npm run test --workspace=@erp/svc-productos -- --run test/integration --passWithNoTests || true
+          npm run test:integration --workspace=@erp/svc-ordenes -- --passWithNoTests
+          npm run test:integration --workspace=@erp/svc-stock -- --passWithNoTests
+          npm run test:integration --workspace=@erp/svc-productos -- --passWithNoTests
         env:
           CI: "true"
       - name: Docker info
@@ -146,7 +147,7 @@ jobs:
           curl -f http://localhost/health/ordenes
           curl -f http://localhost/health/stock
           curl -f http://localhost/health/obs
-          curl -f http://localhost/health || true
+          curl -f http://localhost/health
           curl -f http://localhost:3001/metrics | head -20
       - uses: actions/setup-node@v4
         with: { node-version: "20", cache: "npm" }
@@ -156,7 +157,7 @@ jobs:
         env:
           ERP_BASE_URL: http://localhost:80
           ERP_API_KEY: ci-test-key-7f4a2e8c1d9b6a3f0e5c8b2d4a6f1e9c
-        run: npm test
+        run: npm run test:e2e
       - name: Print service logs on failure
         if: failure()
         run: docker compose logs --tail=100
@@ -169,11 +170,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - run: docker compose up --build -d
+        env:
+          ADMIN_API_KEY: ci-test-key-7f4a2e8c1d9b6a3f0e5c8b2d4a6f1e9c
       - run: |
           for i in $(seq 1 30); do curl -sf http://localhost/health/productos && break; sleep 5; done
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
       - name: Run k6 order-flow (50 VUs)
-        run: k6 run tests/load/order-flow.js --env ERP_BASE_URL=http://localhost:80
+        run: k6 run tests/load/order-flow.js --env ERP_BASE_URL=http://localhost:80 --env ERP_API_KEY=ci-test-key-7f4a2e8c1d9b6a3f0e5c8b2d4a6f1e9c
       - name: Run k6 stock-contention (100 VUs)
-        run: k6 run tests/load/stock-contention.js --env ERP_BASE_URL=http://localhost:80
+        run: k6 run tests/load/stock-contention.js --env ERP_BASE_URL=http://localhost:80 --env ERP_API_KEY=ci-test-key-7f4a2e8c1d9b6a3f0e5c8b2d4a6f1e9c

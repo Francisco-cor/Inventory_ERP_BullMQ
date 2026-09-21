@@ -111,9 +111,9 @@ curl -f http://localhost/health
 curl -f http://localhost:3001/metrics | head
 
 # Correr
-cd tests/e2e && npm install && npm test
+cd tests/e2e && npm install && npm run test:e2e
 # o desde raíz
-npm run test --workspace=tests/e2e
+npm run test:e2e --workspace=tests/e2e
 
 # Con seeds determinísticos (Fase 1)
 make seed
@@ -195,7 +195,7 @@ make type-check && make lint
 npm run test --workspaces -- --coverage
 npm run test --workspace=@erp/svc-ordenes -- --run test/integration
 npx vitest run tests/contract --run
-docker compose up -d --build && sleep 5 && cd tests/e2e && npm test
+docker compose up -d --build && sleep 5 && npm run test:e2e --workspace=tests/e2e
 ```
 
 **Coverage gates:** `vitest.config.ts` por servicio tiene `thresholds: {lines:80, branches:80}`; si baja, `npm run test -- --coverage` falla (`process.exit(1)`), y CI bloquea PR. Subir a `codecov` con `codecov/codecov-action@v4`.

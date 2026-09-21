@@ -286,7 +286,7 @@ Tests run against real services in Docker to verify the complete flow:
 docker compose up -d
 
 # Run tests
-cd tests/e2e && npm install && npm test
+cd tests/e2e && npm install && npm run test:e2e
 ```
 
 Verifications include:

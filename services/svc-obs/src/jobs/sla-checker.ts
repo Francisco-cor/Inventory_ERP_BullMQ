@@ -3,14 +3,16 @@ import { randomUUID } from "node:crypto";
 import { EVENTS } from "@erp/event-bus";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
+import { config } from "../config.js";
 
-const SLA_THRESHOLD_SECONDS = Number(process.env.SLA_THRESHOLD_SECONDS ?? 60);
-const CHECK_INTERVAL_MS = Number(process.env.SLA_CHECK_INTERVAL_MS ?? 30_000);
+const SLA_THRESHOLD_SECONDS = config.SLA_THRESHOLD_SECONDS;
+const CHECK_INTERVAL_MS = config.SLA_CHECK_INTERVAL_MS;
 
 const QUEUE_NAME = "sla-checker";
 const LOCK_KEY = "svc-obs:sla-checker:lock";
-// Lock TTL: the interval minus a small buffer so a slow run doesn't block the next
-const LOCK_TTL_MS = Math.max(CHECK_INTERVAL_MS - 5_000, 10_000);
+// Keep the lock alive for the configured interval plus a safety margin. A TTL
+// shorter than the interval lets a slow check overlap with another replica.
+const LOCK_TTL_MS = Math.max(config.SLA_LOCK_TTL_MS, CHECK_INTERVAL_MS + 10_000);
 
 let queue: Queue | undefined;
 let worker: Worker | undefined;
@@ -46,6 +48,8 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
       try {
         const client = await pool.connect();
         try {
+          await client.query("BEGIN");
+
           // Find orders pending longer than the threshold
           const { rows } = await client.query<{
             orden_id: string;
@@ -60,7 +64,10 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
             [SLA_THRESHOLD_SECONDS]
           );
 
-          if (rows.length === 0) return;
+          if (rows.length === 0) {
+            await client.query("COMMIT");
+            return;
+          }
 
           const orderIds = rows.map((r) => r.orden_id);
 
@@ -83,6 +90,14 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
             console.log(`[sla-checker] SLA_WARNING: orden ${row.orden_id} (${row.segundos}s)`);
             await publishEvent(EVENTS.SLA_WARNING, alert, row.orden_id, client);
           }
+          await client.query("COMMIT");
+        } catch (err) {
+          try {
+            await client.query("ROLLBACK");
+          } catch {
+            void 0;
+          }
+          throw err;
         } finally {
           client.release();
         }

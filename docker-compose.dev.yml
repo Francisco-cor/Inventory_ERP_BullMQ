@@ -266,6 +266,8 @@ services:
       LOG_LEVEL: debug
       SLA_THRESHOLD_SECONDS: 60
       SLA_CHECK_INTERVAL_MS: 30000
+      SLA_LOCK_TTL_MS: 120000
+      SSE_MAX_CLIENTS: 100
       CHOKIDAR_USEPOLLING: "true"
     ports:
       - "3004:3004"

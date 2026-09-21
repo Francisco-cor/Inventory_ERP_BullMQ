@@ -21,6 +21,7 @@ export const options = {
 };
 
 const BASE = __ENV.ERP_BASE_URL || "http://localhost:80";
+const API_KEY = __ENV.ERP_API_KEY || "";
 const PRODUCTO_ID = __ENV.PRODUCTO_ID || "11111111-1111-4111-8111-111111111001";
 
 export default function () {
@@ -30,7 +31,7 @@ export default function () {
     `${BASE}/api/v1/stock/${PRODUCTO_ID}/ajustar`,
     JSON.stringify({ delta, motivo: `k6 contention vu=${__VU} iter=${__ITER}` }),
     {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Api-Key": API_KEY },
     }
   );
 

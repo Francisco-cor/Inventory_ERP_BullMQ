@@ -23,6 +23,7 @@ export const options = {
 
 // Producto fijo para load (asume seed:large ya corrido o stock suficiente)
 const BASE = __ENV.ERP_BASE_URL || "http://localhost:80";
+const API_KEY = __ENV.ERP_API_KEY || "";
 const PRODUCTO_ID = __ENV.PRODUCTO_ID || "11111111-1111-4111-8111-111111111001";
 const SKU = __ENV.SKU || "SKU-SEED-001";
 
@@ -53,7 +54,11 @@ export default function () {
   });
   const start = Date.now();
   const res = http.post(`${BASE}/api/v1/ordenes`, payload, {
-    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Api-Key": API_KEY,
+    },
   });
 
   const ok = check(res, {

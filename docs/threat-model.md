@@ -55,18 +55,18 @@ Trust boundary principal: **Nginx** (edge) → **Fastify** (app) → **PG/Redis*
 
 ### D — Denial of Service
 
-| Amenaza                   | Mitigación                                                                                                 |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Flood `POST /ordenes`     | Nginx `limit_req zone=api 10r/s burst 20`, Fastify `rateLimit 200/min`                                     |
-| Flood `/admin/dlq`        | Nginx `zone=admin 5r/s burst 10`                                                                           |
-| SSE connections infinitas | `svc-obs` `broadcast` con `try/catch`, `proxy_read_timeout 86400s`, Fase 5 añadirá Redis adapter + límites |
+| Amenaza                   | Mitigación                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Flood `POST /ordenes`     | Nginx `limit_req zone=api 10r/s burst 20`, Fastify `rateLimit 200/min`                                                    |
+| Flood `/admin/dlq`        | Nginx `zone=admin 5r/s burst 10`                                                                                          |
+| SSE connections infinitas | `svc-obs` `SSE_MAX_CLIENTS` por réplica, `broadcast` con `try/catch`, `proxy_read_timeout 86400s`, Redis adapter opcional |
 
 ### E — Elevation of Privilege
 
-| Amenaza                                | Mitigación                                                                                                                                       |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lector` intenta `POST /stock/ajustar` | `requireRole('admin','operador')` (futuro, ahora solo `requireApiKey`/`requireJwt`); `requireRole` ya implementado en `@erp/auth` para Fase 9/10 |
-| JWT con `role: admin` falsificado      | `jsonwebtoken.verify` con `JWT_SECRET`; secret min 16 chars validado en `@erp/env`                                                               |
+| Amenaza                                | Mitigación                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `lector` intenta `POST /stock/ajustar` | `requireRole('admin','operador')` en la ruta; `requireRole` también protege `/admin/*` para `admin` |
+| JWT con `role: admin` falsificado      | `jsonwebtoken.verify` con `JWT_SECRET`; secret min 16 chars validado en `@erp/env`                  |
 
 ---
 

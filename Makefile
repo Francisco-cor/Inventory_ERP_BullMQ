@@ -60,13 +60,13 @@ test: ## Tests unitarios por workspace
 
 seed: ## Ejecuta seeds determinísticos (requiere stack levantado)
 	@echo "Seeding productos/stock/ordenes..."
-	npm run seed --workspace=@erp/svc-productos || true
-	npm run seed --workspace=@erp/svc-ordenes || true
-	npm run seed --workspace=@erp/svc-stock || true
+	npm run seed --workspace=@erp/svc-productos
+	npm run seed --workspace=@erp/svc-ordenes
+	npm run seed --workspace=@erp/svc-stock
 	@echo "Seed completado. Verifica con curl http://localhost:80/api/v1/productos"
 
 seed-large: ## Seed de 100 productos sintéticos para load tests
-	npm run seed:large --workspace=@erp/svc-productos || true
+	npm run seed:large --workspace=@erp/svc-productos
 	@echo "Seed large completado (100 productos SKU-LARGE-*)"
 
 backup: ## Backup de todas las DBs (pg_dump)
