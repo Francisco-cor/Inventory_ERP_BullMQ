@@ -1,4 +1,4 @@
-import { Queue, Worker, Job } from "bullmq";
+import { Job, Queue, UnrecoverableError, Worker } from "bullmq";
 import { randomUUID } from "node:crypto";
 import type { DomainEvent, EventName, ServiceName } from "@erp/shared-types";
 import { validateEventPayload } from "./schemas.js";
@@ -23,7 +23,7 @@ const metrics = {
   published: 0,
   failed: 0,
   consumed: 0,
-  skippedVersion: 0,
+  unsupportedVersion: 0,
   dlq: 0,
 };
 
@@ -94,9 +94,6 @@ function getAllServices(): ServiceName[] {
   return [...ALL_SERVICES_DEFAULT];
 }
 
-// For convenience, alias used inside createEventBus
-const ALL_SERVICES = ALL_SERVICES_DEFAULT;
-
 function queueName(service: ServiceName): string {
   return `events-${service}`;
 }
@@ -121,6 +118,7 @@ export function createEventBus(config: EventBusConfig) {
 
   // One publish queue per service for fan-out — dynamic via EVENT_BUS_SERVICES
   const initialServices = getAllServices();
+  if (!initialServices.includes(serviceName)) initialServices.push(serviceName);
   const publishQueues = new Map<ServiceName, Queue>(
     initialServices.map((s) => [s, new Queue(queueName(s), { connection })])
   );
@@ -145,12 +143,14 @@ export function createEventBus(config: EventBusConfig) {
         const event = job.data;
         // Schema version negotiation — skip unknown versions (permanent, no retry)
         if (event.schemaVersion !== CURRENT_SCHEMA_VERSION) {
-          metrics.skippedVersion += 1;
+          metrics.unsupportedVersion += 1;
           logger.warn(
             { eventId: event.id, eventName: event.name, schemaVersion: event.schemaVersion },
-            "unknown schemaVersion — skipping"
+            "unknown schemaVersion — moving to DLQ"
           );
-          return;
+          throw new UnrecoverableError(
+            `Unsupported schemaVersion ${event.schemaVersion} for ${event.name}`
+          );
         }
         // Validate payload for known events (permanent error if invalid)
         try {
@@ -162,7 +162,7 @@ export function createEventBus(config: EventBusConfig) {
             { eventId: event.id, eventName: event.name, error: msg },
             "payload validation failed — permanent"
           );
-          throw err;
+          throw new UnrecoverableError(err instanceof Error ? err.message : String(err));
         }
         metrics.consumed += 1;
         const eventHandlers = handlers.get(event.name) ?? [];
@@ -210,7 +210,7 @@ export function createEventBus(config: EventBusConfig) {
           q = new Queue(queueName(s), { connection });
           publishQueues.set(s, q);
         }
-        return q.add(name, event, JOB_OPTIONS);
+        return q.add(name, event, { ...JOB_OPTIONS, jobId: event.id });
       })
     );
 
@@ -239,7 +239,7 @@ export function createEventBus(config: EventBusConfig) {
           q = new Queue(queueName(s), { connection });
           publishQueues.set(s, q);
         }
-        return q.add(event.name, event, JOB_OPTIONS);
+        return q.add(event.name, event, { ...JOB_OPTIONS, jobId: event.id });
       })
     );
     metrics.published += 1;

@@ -1,20 +1,28 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { publishEvent, EVENTS } from "../events/publisher.js";
-import { requireApiKey } from "../plugins/auth.js";
-import { getIdempotent, hashBody, saveIdempotent } from "../plugins/idempotency.js";
+import { requireAuth, requireRole } from "../plugins/auth.js";
+import {
+  getIdempotent,
+  hashBody,
+  lockIdempotencyKey,
+  removeExpiredIdempotencyKey,
+  saveIdempotent,
+} from "../plugins/idempotency.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
 async function registrarAlertaSiCorresponde(
   productoId: string,
   sku: string,
-  disponible: number
+  disponible: number,
+  client?: PoolClient
 ): Promise<void> {
   if (disponible >= STOCK_UMBRAL) return;
   const tipo = disponible === 0 ? "stock_agotado" : "stock_bajo";
-  await pool.query(
+  await (client ?? pool).query(
     `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (producto_id) WHERE resuelta = false
@@ -23,13 +31,12 @@ async function registrarAlertaSiCorresponde(
                    creada_en    = NOW()`,
     [productoId, sku, disponible, STOCK_UMBRAL, tipo]
   );
-  await publishEvent(EVENTS.STOCK_ALERTA, {
-    productoId,
-    sku,
-    disponible,
-    umbral: STOCK_UMBRAL,
-    tipo,
-  });
+  await publishEvent(
+    EVENTS.STOCK_ALERTA,
+    { productoId, sku, disponible, umbral: STOCK_UMBRAL, tipo },
+    undefined,
+    client
+  );
 }
 
 export async function stockRoutes(app: FastifyInstance) {
@@ -114,7 +121,7 @@ export async function stockRoutes(app: FastifyInstance) {
   app.post(
     "/:productoId/ajustar",
     {
-      preHandler: [requireApiKey],
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["stock"],
         summary: "Ajustar manualmente el stock disponible de un producto",
@@ -156,26 +163,33 @@ export async function stockRoutes(app: FastifyInstance) {
           ...(req.body as object),
           productoId: (req.params as { productoId: string }).productoId,
         });
-        const cached = await getIdempotent(idemKey, requestHash);
-        if (cached) {
-          if ("conflict" in cached) {
-            return reply.status(422).send({
-              error: "IdempotencyConflict",
-              message: "Idempotency-Key ya usada con diferente payload",
-              statusCode: 422,
-              timestamp: new Date().toISOString(),
-            });
-          }
-          return reply.status(cached.status).send(cached.body);
-        }
       }
 
       const { productoId } = req.params as { productoId: string };
       const { delta, motivo } = req.body as { delta: number; motivo: string };
 
       const client = await pool.connect();
+      let committed = false;
       try {
         await client.query("BEGIN");
+
+        if (idemKey) {
+          await lockIdempotencyKey(client, idemKey);
+          await removeExpiredIdempotencyKey(idemKey, client);
+          const cached = await getIdempotent(idemKey, requestHash, client);
+          if (cached) {
+            await client.query("COMMIT");
+            if ("conflict" in cached) {
+              return reply.status(422).send({
+                error: "IdempotencyConflict",
+                message: "Idempotency-Key ya usada con diferente payload",
+                statusCode: 422,
+                timestamp: new Date().toISOString(),
+              });
+            }
+            return reply.status(cached.status).send(cached.body);
+          }
+        }
 
         const { rows } = await client.query(
           "SELECT disponible FROM stock WHERE producto_id = $1 FOR UPDATE",
@@ -225,20 +239,22 @@ export async function stockRoutes(app: FastifyInstance) {
           client
         );
 
-        await client.query("COMMIT");
-
-        // Registrar alerta si el stock disponible cae bajo el umbral (usa outbox via pool, no necesita tx)
-        await registrarAlertaSiCorresponde(productoId, updated[0].sku, updated[0].disponible);
-
         const responseBody = { data: updated[0] };
         if (idemKey) {
-          await saveIdempotent(idemKey, requestHash, 200, responseBody).catch((e) =>
-            req.log.warn({ err: e }, "[idempotency] failed to save key")
-          );
+          await saveIdempotent(idemKey, requestHash, 200, responseBody, client);
         }
+        await registrarAlertaSiCorresponde(
+          productoId,
+          updated[0].sku,
+          updated[0].disponible,
+          client
+        );
+        await client.query("COMMIT");
+        committed = true;
+
         return responseBody;
       } catch (err) {
-        await client.query("ROLLBACK");
+        if (!committed) await client.query("ROLLBACK");
         throw err;
       } finally {
         client.release();

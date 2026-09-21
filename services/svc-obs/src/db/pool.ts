@@ -1,12 +1,9 @@
 import pg from "pg";
 import { waitForWithJitter, CircuitBreaker } from "@erp/resilience";
-
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required");
-}
+import { config } from "../config.js";
 
 export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: config.DATABASE_URL,
   max: Number(process.env.DB_POOL_MAX ?? 10),
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,

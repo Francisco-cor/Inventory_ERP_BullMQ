@@ -1,7 +1,8 @@
 import { Queue, Worker } from "bullmq";
 import { randomUUID } from "node:crypto";
+import { EVENTS } from "@erp/event-bus";
 import { pool } from "../db/pool.js";
-import { broadcast } from "../sse/broker.js";
+import { publishEvent } from "../events/publisher.js";
 
 const SLA_THRESHOLD_SECONDS = Number(process.env.SLA_THRESHOLD_SECONDS ?? 60);
 const CHECK_INTERVAL_MS = Number(process.env.SLA_CHECK_INTERVAL_MS ?? 30_000);
@@ -71,7 +72,8 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
             [orderIds]
           );
 
-          // Broadcast SLA warnings and persist each one to the event log
+          // Publish through the outbox so SLA warnings have the same delivery
+          // guarantees and audit trail as every other domain event.
           for (const row of rows) {
             const alert = {
               ordenId: row.orden_id,
@@ -79,14 +81,7 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
               segundosPendiente: row.segundos,
             };
             console.log(`[sla-checker] SLA_WARNING: orden ${row.orden_id} (${row.segundos}s)`);
-            broadcast("sla_warning", alert);
-
-            await client.query(
-              `INSERT INTO event_log (event_id, event_name, source, correlation_id, payload, emitido_en)
-               VALUES ($1, 'sla.warning', 'svc-obs', $2, $3, NOW())
-               ON CONFLICT (event_id) DO NOTHING`,
-              [randomUUID(), row.orden_id, JSON.stringify(alert)]
-            );
+            await publishEvent(EVENTS.SLA_WARNING, alert, row.orden_id, client);
           }
         } finally {
           client.release();

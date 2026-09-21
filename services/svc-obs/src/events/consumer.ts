@@ -32,6 +32,11 @@ const OrdenCanceladaSchema = z.object({
   ordenId: z.string().uuid(),
   motivo: z.string().optional(),
 });
+const SlaWarningSchema = z.object({
+  ordenId: z.string().uuid(),
+  creadaEn: z.string(),
+  segundosPendiente: z.number().int().min(0),
+});
 
 function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName: string): T {
   const parsed = schema.safeParse(payload);
@@ -138,6 +143,15 @@ async function onOrdenCancelada(event: DomainEvent<OrdenCanceladaPayload>): Prom
   }
 }
 
+async function onSlaWarning(event: DomainEvent): Promise<void> {
+  const parsed = SlaWarningSchema.safeParse(event.payload);
+  if (!parsed.success) {
+    throw new Error(`ValidationError: payload inválido para ${event.name}`);
+  }
+  if (!(await storeAndBroadcast(event))) return;
+  await broadcast("sla_warning", parsed.data);
+}
+
 // Generic handler for all other events (just store + broadcast)
 async function onAnyEvent(event: DomainEvent): Promise<void> {
   if (!event.payload || typeof event.payload !== "object") {
@@ -150,6 +164,7 @@ export function startEventConsumer(): void {
   eventBus.subscribe(EVENTS.ORDEN_CREADA, onOrdenCreada);
   eventBus.subscribe(EVENTS.ORDEN_CONFIRMADA, onOrdenConfirmada);
   eventBus.subscribe(EVENTS.ORDEN_CANCELADA, onOrdenCancelada);
+  eventBus.subscribe(EVENTS.SLA_WARNING, onSlaWarning);
 
   // Track all other events for the event log
   eventBus.subscribe(EVENTS.PRODUCTO_CREADO, onAnyEvent);

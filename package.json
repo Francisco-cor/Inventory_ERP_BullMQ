@@ -15,6 +15,7 @@
     "up": "docker compose up --build -d",
     "down": "docker compose down -v",
     "logs": "docker compose logs -f",
+    "build:packages": "npm run build --workspace=@erp/shared-types && npm run build --workspace=@erp/logger && npm run build --workspace=@erp/event-bus",
     "migrate": "npm run migrate --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",
     "lint": "eslint .",
@@ -25,6 +26,7 @@
     "openapi:generate": "bash scripts/generate-openapi.sh",
     "prepare": "husky"
   },
+  "pretest": "npm run build:packages",
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"

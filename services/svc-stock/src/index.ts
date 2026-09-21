@@ -14,7 +14,8 @@ import { startEventConsumer } from "./events/consumer.js";
 import { eventBus } from "./events/bus.js";
 import { startOutboxRelay, stopOutboxRelay } from "./jobs/outbox-relay.js";
 import { startRetentionJob, stopRetentionJob } from "./jobs/retention.js";
-import { createLogger, correlationStore } from "@erp/logger";
+import { createLogger, correlationStore, normalizeCorrelationId } from "@erp/logger";
+import "./config.js";
 import {
   createMetrics,
   registerHttpMetrics,
@@ -45,8 +46,9 @@ async function bootstrap() {
 
   app.addHook("onRequest", async (request, reply) => {
     const headers = request.headers as Record<string, string>;
-    const correlationId =
-      (headers["x-correlation-id"] as string) ?? (headers["x-request-id"] as string);
+    const correlationId = normalizeCorrelationId(
+      (headers["x-correlation-id"] as string) ?? (headers["x-request-id"] as string)
+    );
     const requestId = (headers["x-request-id"] as string) ?? correlationId;
     const ctx = {
       correlationId: correlationId ?? randomUUID(),

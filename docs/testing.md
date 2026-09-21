@@ -99,10 +99,11 @@ npx vitest run tests/contract --run --reporter=verbose
 
 **Dónde:** `tests/e2e/flow.test.ts` (3 describes, 10 tests), `tests/e2e/package.json` (`supertest`, `vitest`).
 
-**Requiere:** `docker compose up -d` (4 PG, Redis, 4 servicios, nginx).
+**Requiere:** Docker, una `ADMIN_API_KEY` y `docker compose up -d` (4 PG, Redis, 4 servicios, nginx).
 
 ```bash
 # Levantar (si no está)
+export ADMIN_API_KEY="$(openssl rand -hex 32)"
 docker compose up -d --build
 # Esperar health
 for SVC in productos ordenes stock obs; do curl -f http://localhost/health/$SVC; done
@@ -118,6 +119,10 @@ npm run test --workspace=tests/e2e
 make seed
 # El E2E crea producto SKU=E2E-<timestamp> y stock 20, no depende de seeds previos, pero reusa poll para stock row
 ```
+
+El test envía `ERP_API_KEY` en las operaciones de escritura. En un entorno de
+producción debe coincidir con `ADMIN_API_KEY`; en CI ambas variables se inyectan
+desde el workflow.
 
 **Nuevo en Fase 7:**
 

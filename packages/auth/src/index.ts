@@ -26,16 +26,32 @@ function getEnv(name: string): string | undefined {
   return process.env[name];
 }
 
+function getCorsOrigin(): true | false | string | string[] {
+  const configured = getEnv("CORS_ORIGIN")
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (configured && configured.length > 0) {
+    return configured.length === 1 ? configured[0] : configured;
+  }
+
+  // Same-origin dashboard traffic does not need CORS. Keep local development
+  // convenient while making production fail closed unless explicitly allowed.
+  return (getEnv("NODE_ENV") ?? "development") === "production" ? false : true;
+}
+
 // ─── Security plugin (helmet + cors) ─────────────────────────────────────────
 
 export async function registerSecurity(app: FastifyInstance): Promise<void> {
+  const configuredCors = getEnv("CORS_ORIGIN")?.trim();
   await app.register(helmet, {
     contentSecurityPolicy: false, // no bloquea Swagger UI
     crossOriginEmbedderPolicy: false,
   });
   await app.register(cors, {
-    origin: true,
-    credentials: true,
+    origin: getCorsOrigin(),
+    credentials: Boolean(configuredCors && configuredCors !== "*"),
     allowedHeaders: [
       "Content-Type",
       "Authorization",
@@ -70,6 +86,7 @@ export async function requireApiKey(request: FastifyRequest, reply: FastifyReply
         timestamp: new Date().toISOString(),
       });
     }
+    request.apiKeyValid = true;
     return; // dev/test bypass
   }
 

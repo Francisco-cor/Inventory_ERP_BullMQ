@@ -104,7 +104,9 @@ export const eventSchemas: Record<string, z.ZodSchema> = {
 
 export function validateEventPayload(eventName: string, payload: unknown): void {
   const schema = eventSchemas[eventName];
-  if (!schema) return; // unknown event, no validation
+  if (!schema) {
+    throw new Error(`ValidationError: evento desconocido ${eventName}`);
+  }
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(

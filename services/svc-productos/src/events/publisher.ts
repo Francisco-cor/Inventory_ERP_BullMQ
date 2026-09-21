@@ -3,6 +3,7 @@ import { EVENTS, validateEventPayload } from "@erp/event-bus";
 import type { EventName } from "@erp/shared-types";
 import { pool } from "../db/pool.js";
 import type { PoolClient } from "pg";
+import { normalizeCorrelationId } from "@erp/logger";
 
 export { EVENTS };
 
@@ -19,7 +20,7 @@ export async function publishEvent<T>(
 ): Promise<string> {
   validateEventPayload(name, payload);
   const eventId = randomUUID();
-  const corr = correlationId ?? randomUUID();
+  const corr = normalizeCorrelationId(correlationId ?? randomUUID());
   const payloadJson = JSON.stringify(payload);
 
   const doInsert = async (c: PoolClient | typeof pool) => {

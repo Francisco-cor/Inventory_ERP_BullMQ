@@ -21,6 +21,17 @@ export function getRequestId(): string | undefined {
   return correlationStore.getStore()?.requestId;
 }
 
+/** Returns a UUID suitable for columns and event contracts that require one. */
+export function normalizeCorrelationId(value: unknown): string {
+  if (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
+  ) {
+    return value.trim();
+  }
+  return randomUUID();
+}
+
 /**
  * Ejecuta fn dentro de un contexto de correlación.
  * Genera IDs si no se proveen.

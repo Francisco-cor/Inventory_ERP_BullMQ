@@ -4,8 +4,14 @@ import { pool } from "../db/pool.js";
 import { publishEvent, EVENTS } from "../events/publisher.js";
 import { CrearOrdenSchema } from "../domain/orden.schema.js";
 import { type EstadoOrden, puedeTransicionar, describir } from "../domain/orden.statemachine.js";
-import { requireApiKey } from "../plugins/auth.js";
-import { getIdempotent, hashBody, saveIdempotent } from "../plugins/idempotency.js";
+import { requireAuth, requireRole } from "../plugins/auth.js";
+import {
+  getIdempotent,
+  hashBody,
+  lockIdempotencyKey,
+  removeExpiredIdempotencyKey,
+  saveIdempotent,
+} from "../plugins/idempotency.js";
 
 export async function ordenesRoutes(app: FastifyInstance) {
   // GET /api/v1/ordenes
@@ -127,7 +133,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
   app.post(
     "/",
     {
-      preHandler: [requireApiKey],
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["ordenes"],
         summary: "Crear una nueva orden",
@@ -175,18 +181,6 @@ export async function ordenesRoutes(app: FastifyInstance) {
           });
         }
         requestHash = hashBody(req.body);
-        const cached = await getIdempotent(idemKey, requestHash);
-        if (cached) {
-          if ("conflict" in cached) {
-            return reply.status(422).send({
-              error: "IdempotencyConflict",
-              message: "Idempotency-Key ya usada con diferente payload",
-              statusCode: 422,
-              timestamp: new Date().toISOString(),
-            });
-          }
-          return reply.status(cached.status).send(cached.body);
-        }
       }
 
       const parsed = CrearOrdenSchema.safeParse(req.body);
@@ -211,6 +205,24 @@ export async function ordenesRoutes(app: FastifyInstance) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+
+        if (idemKey) {
+          await lockIdempotencyKey(client, idemKey);
+          await removeExpiredIdempotencyKey(idemKey, client);
+          const cached = await getIdempotent(idemKey, requestHash, client);
+          if (cached) {
+            await client.query("COMMIT");
+            if ("conflict" in cached) {
+              return reply.status(422).send({
+                error: "IdempotencyConflict",
+                message: "Idempotency-Key ya usada con diferente payload",
+                statusCode: 422,
+                timestamp: new Date().toISOString(),
+              });
+            }
+            return reply.status(cached.status).send(cached.body);
+          }
+        }
 
         const { rows } = await client.query(
           `INSERT INTO ordenes (id, estado, total) VALUES ($1, 'pendiente', $2) RETURNING *`,
@@ -243,14 +255,11 @@ export async function ordenesRoutes(app: FastifyInstance) {
           client
         );
 
-        await client.query("COMMIT");
-
         const responseBody = { data: orden };
         if (idemKey) {
-          await saveIdempotent(idemKey, requestHash, 201, responseBody).catch((e) =>
-            req.log.warn({ err: e }, "[idempotency] failed to save key")
-          );
+          await saveIdempotent(idemKey, requestHash, 201, responseBody, client);
         }
+        await client.query("COMMIT");
         return reply.status(201).send(responseBody);
       } catch (err) {
         await client.query("ROLLBACK");
@@ -265,7 +274,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
   app.post(
     "/:id/cancelar",
     {
-      preHandler: [requireApiKey],
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["ordenes"],
         summary: "Cancelar una orden pendiente",

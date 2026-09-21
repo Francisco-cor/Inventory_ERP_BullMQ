@@ -14,4 +14,5 @@ export const EVENTS = {
   STOCK_LIBERADO: "stock.liberado",
   STOCK_AJUSTADO: "stock.ajustado",
   STOCK_ALERTA: "stock.alerta",
+  SLA_WARNING: "sla.warning",
 } as const;

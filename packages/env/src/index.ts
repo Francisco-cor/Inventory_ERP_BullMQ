@@ -24,6 +24,7 @@ const BaseEnvSchema = z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
     ADMIN_API_KEY: z.string().optional(),
+    CORS_ORIGIN: z.string().optional(),
     JWT_SECRET: z.string().min(16, "JWT_SECRET debe tener al menos 16 caracteres").optional(),
     DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
 

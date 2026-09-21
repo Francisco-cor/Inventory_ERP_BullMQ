@@ -112,7 +112,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "20", cache: "npm" }
       - run: npm ci
-      - run: npm --workspace=@erp/contract-tests test 2>/dev/null || npm run test --workspace=tests/contract 2>/dev/null || npx vitest run tests/contract --run
+      - run: npm run build:packages
+      - run: npm --workspace=@erp/contract-tests test
 
   e2e:
     name: E2E Integration Tests
@@ -128,6 +129,8 @@ jobs:
           restore-keys: buildx-
       - name: Build and start services
         run: docker compose up --build -d
+        env:
+          ADMIN_API_KEY: ci-test-key-7f4a2e8c1d9b6a3f0e5c8b2d4a6f1e9c
       - name: Wait for nginx to be healthy
         run: |
           echo "Waiting for services to be ready..."
@@ -152,6 +155,7 @@ jobs:
         working-directory: tests/e2e
         env:
           ERP_BASE_URL: http://localhost:80
+          ERP_API_KEY: ci-test-key-7f4a2e8c1d9b6a3f0e5c8b2d4a6f1e9c
         run: npm test
       - name: Print service logs on failure
         if: failure()

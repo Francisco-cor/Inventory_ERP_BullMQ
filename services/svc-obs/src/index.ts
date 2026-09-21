@@ -16,7 +16,8 @@ import { startSlaChecker, stopSlaChecker } from "./jobs/sla-checker.js";
 import { initSseBroker, closeSseBroker, clientCount } from "./sse/broker.js";
 import { randomUUID } from "node:crypto";
 import { isShuttingDown as _isShuttingDown, setShuttingDown } from "./state.js";
-import { createLogger, correlationStore } from "@erp/logger";
+import { createLogger, correlationStore, normalizeCorrelationId } from "@erp/logger";
+import "./config.js";
 import {
   createMetrics,
   registerHttpMetrics,
@@ -54,8 +55,9 @@ async function bootstrap(): Promise<void> {
   // Correlation hook (must be before other hooks)
   app.addHook("onRequest", async (request, reply) => {
     const headers = request.headers as Record<string, string>;
-    const correlationId =
-      (headers["x-correlation-id"] as string) ?? (headers["x-request-id"] as string) ?? undefined;
+    const correlationId = normalizeCorrelationId(
+      (headers["x-correlation-id"] as string) ?? (headers["x-request-id"] as string)
+    );
     const requestId = (headers["x-request-id"] as string) ?? correlationId;
     const ctx = {
       correlationId: correlationId ?? randomUUID(),

@@ -223,10 +223,16 @@ Override `docker-compose.dev.yml` monta `services/*/src` y `packages/*` para HMR
 ### Production
 
 ```bash
+# La configuración de producción valida ADMIN_API_KEY al arrancar.
+export ADMIN_API_KEY="$(openssl rand -hex 32)"
 docker compose up --build -d
 # o
 make up
 ```
+
+Sin `ADMIN_API_KEY`, los servicios fallan fast-closed en producción. Para desarrollo
+local, `docker compose` usa `NODE_ENV=production` en el stack base, así que conviene
+exportar una clave también; los endpoints de escritura y `/admin/*` la requieren.
 
 This starts: 4 Postgres instances, Redis, 4 Node.js services, nginx, and the React dashboard.
 

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
 import { CrearProductoSchema, ActualizarProductoSchema } from "../domain/producto.schema.js";
-import { requireApiKey } from "../plugins/auth.js";
+import { requireAuth, requireRole } from "../plugins/auth.js";
 
 export async function productosRoutes(app: FastifyInstance) {
   // GET /api/v1/productos
@@ -89,7 +89,7 @@ export async function productosRoutes(app: FastifyInstance) {
   app.post(
     "/",
     {
-      preHandler: [requireApiKey],
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["productos"],
         summary: "Crear un nuevo producto",
@@ -150,7 +150,7 @@ export async function productosRoutes(app: FastifyInstance) {
   app.patch(
     "/:id",
     {
-      preHandler: [requireApiKey],
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["productos"],
         summary: "Actualizar un producto",
@@ -243,7 +243,7 @@ export async function productosRoutes(app: FastifyInstance) {
   app.delete(
     "/:id",
     {
-      preHandler: [requireApiKey],
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["productos"],
         summary: "Desactivar (soft delete) un producto",

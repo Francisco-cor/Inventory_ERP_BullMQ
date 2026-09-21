@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { pool } from "../db/pool.js";
+import { requireAuth, requireRole } from "../plugins/auth.js";
 
 export async function alertasRoutes(app: FastifyInstance) {
   // GET /api/v1/stock/alertas
@@ -61,6 +62,7 @@ export async function alertasRoutes(app: FastifyInstance) {
   app.patch(
     "/:id/resolver",
     {
+      preHandler: [requireAuth, requireRole("admin", "operador")],
       schema: {
         tags: ["alertas"],
         summary: "Marcar una alerta de stock como resuelta",

@@ -17,6 +17,7 @@ import http from "node:http";
 import supertest from "supertest";
 
 const BASE = process.env.ERP_BASE_URL ?? "http://localhost:80";
+const API_KEY = process.env.ERP_API_KEY ?? "";
 const api = supertest(BASE);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -138,6 +139,7 @@ describe("ERP — full order flow", () => {
   test("1. POST /api/v1/productos — create product", async () => {
     const res = await api
       .post("/api/v1/productos")
+      .set("X-Api-Key", API_KEY)
       .send({
         sku: SKU,
         nombre: "Producto E2E Test",
@@ -163,6 +165,7 @@ describe("ERP — full order flow", () => {
 
     const res = await api
       .post(`/api/v1/stock/${productoId}/ajustar`)
+      .set("X-Api-Key", API_KEY)
       .send({
         delta: STOCK_INI,
         motivo: "Inventario inicial E2E",
@@ -176,6 +179,7 @@ describe("ERP — full order flow", () => {
   test("3. POST /api/v1/ordenes — create order (triggers event chain)", async () => {
     const res = await api
       .post("/api/v1/ordenes")
+      .set("X-Api-Key", API_KEY)
       .send({
         lineas: [
           {
@@ -239,6 +243,7 @@ describe("ERP — insufficient stock flow", () => {
   test("1. Create product with zero stock", async () => {
     const res = await api
       .post("/api/v1/productos")
+      .set("X-Api-Key", API_KEY)
       .send({ sku: SKU, nombre: "Sin Stock E2E", precio: 1.0, unidad: "pza" })
       .expect(201);
     productoId = res.body.data.id;
@@ -247,6 +252,7 @@ describe("ERP — insufficient stock flow", () => {
   test("2. Create order — should be CANCELLED due to no stock", async () => {
     const res = await api
       .post("/api/v1/ordenes")
+      .set("X-Api-Key", API_KEY)
       .send({
         lineas: [{ productoId, sku: SKU, cantidad: 999, precioUnitario: 1.0 }],
       })
@@ -280,6 +286,7 @@ describe("ERP — Idempotency-Key", () => {
   test("setup: create product for idempotency test", async () => {
     const res = await api
       .post("/api/v1/productos")
+      .set("X-Api-Key", API_KEY)
       .send({ sku: SKU, nombre: "Idempotency Test", precio: 10, unidad: "pza" })
       .expect(201);
     productoId = res.body.data.id;
@@ -290,6 +297,7 @@ describe("ERP — Idempotency-Key", () => {
     });
     await api
       .post(`/api/v1/stock/${productoId}/ajustar`)
+      .set("X-Api-Key", API_KEY)
       .send({ delta: 10, motivo: "seed idemp" })
       .expect(200);
   });
@@ -300,6 +308,7 @@ describe("ERP — Idempotency-Key", () => {
 
     const r1 = await api
       .post("/api/v1/ordenes")
+      .set("X-Api-Key", API_KEY)
       .set("Idempotency-Key", key)
       .send(payload)
       .expect(201);
@@ -309,6 +318,7 @@ describe("ERP — Idempotency-Key", () => {
     // Segundo POST con misma key debe ser idempotente (200, mismo id)
     const r2 = await api
       .post("/api/v1/ordenes")
+      .set("X-Api-Key", API_KEY)
       .set("Idempotency-Key", key)
       .send(payload)
       .expect(200);
