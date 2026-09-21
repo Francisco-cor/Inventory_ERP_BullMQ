@@ -156,7 +156,6 @@ export function createEventBus(config: EventBusConfig) {
         try {
           validateEventPayload(event.name, event.payload);
         } catch (err) {
-          metrics.failed += 1;
           const msg = err instanceof Error ? err.message : String(err);
           logger.error(
             { eventId: event.id, eventName: event.name, error: msg },
@@ -175,6 +174,7 @@ export function createEventBus(config: EventBusConfig) {
 
     worker.on("failed", (job, err) => {
       metrics.failed += 1;
+      if (err instanceof UnrecoverableError) metrics.dlq += 1;
       logger.error(
         { jobId: job?.id, eventName: job?.name, attempts: job?.attemptsMade, error: err.message },
         "job failed"

@@ -128,6 +128,7 @@ async function bootstrap() {
 
   metricsUpdater = startMetricsUpdater(metrics, "svc-ordenes", {
     getPoolMetrics,
+    getEventBusMetrics: () => eventBus.getMetrics(),
     getOutboxPending: async () => {
       try {
         const { rows } = await pool.query(

@@ -34,6 +34,11 @@ const BaseEnvSchema = z
     // Event bus
     EVENT_BUS_SERVICES: z.string().optional(),
     OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(10000).default(500),
+    OUTBOX_LEASE_MS: z.coerce.number().int().min(1000).max(300000).default(30000),
+
+    // Dependencia temporal de catálogo para validar snapshots de órdenes
+    PRODUCTOS_SERVICE_URL: z.string().url().default("http://localhost:3001"),
+    CATALOG_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(10000).default(1500),
 
     // DB
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(5000),

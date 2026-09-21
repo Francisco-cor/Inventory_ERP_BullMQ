@@ -31,12 +31,12 @@ Trust boundary principal: **Nginx** (edge) → **Fastify** (app) → **PG/Redis*
 
 ### T — Tampering (manipulación)
 
-| Amenaza                                               | Mitigación                                                                                                       |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Manipular `precioUnitario` en `POST /ordenes`         | `CrearOrdenSchema` (Zod) valida `precioUnitario >=0`, `cantidad >=1`; `hashBody` para idempotency detecta cambio |
-| Replay con mismo `Idempotency-Key` pero body distinto | `getIdempotent` compara `request_hash` (sha256), 422 si difiere                                                  |
-| Manipular `delta` en `POST /stock/ajustar`            | `stock.ts:157` check `disponible+delta >=0`, `FOR UPDATE` evita race                                             |
-| Tamper headers `X-Api-Key`                            | `requireApiKey` compara exacto, `helmet` añade `X-Content-Type-Options: nosniff`                                 |
+| Amenaza                                               | Mitigación                                                                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manipular `precioUnitario` en `POST /ordenes`         | `CrearOrdenSchema` valida el formato y `svc-ordenes` contrasta SKU/precio/activo contra `svc-productos`; `hashBody` detecta replay con payload distinto |
+| Replay con mismo `Idempotency-Key` pero body distinto | `getIdempotent` compara `request_hash` (sha256), 422 si difiere                                                                                         |
+| Manipular `delta` en `POST /stock/ajustar`            | `stock.ts:157` check `disponible+delta >=0`, `FOR UPDATE` evita race                                                                                    |
+| Tamper headers `X-Api-Key`                            | `requireApiKey` compara exacto, `helmet` añade `X-Content-Type-Options: nosniff`                                                                        |
 
 ### R — Repudiation (no repudio)
 

@@ -6,6 +6,11 @@ import { CrearOrdenSchema } from "../domain/orden.schema.js";
 import { type EstadoOrden, puedeTransicionar, describir } from "../domain/orden.statemachine.js";
 import { requireAuth, requireRole } from "../plugins/auth.js";
 import {
+  canonicalizarLineas,
+  CatalogMismatchError,
+  CatalogUnavailableError,
+} from "../catalog/catalog-client.js";
+import {
   getIdempotent,
   hashBody,
   lockIdempotencyKey,
@@ -196,7 +201,28 @@ export async function ordenesRoutes(app: FastifyInstance) {
         });
       }
 
-      const { lineas } = parsed.data;
+      let lineas: typeof parsed.data.lineas;
+      try {
+        lineas = await canonicalizarLineas(parsed.data.lineas);
+      } catch (err) {
+        if (err instanceof CatalogMismatchError) {
+          return reply.status(409).send({
+            error: "CatalogConflict",
+            message: err.message,
+            statusCode: 409,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        if (err instanceof CatalogUnavailableError) {
+          return reply.status(503).send({
+            error: "CatalogUnavailable",
+            message: "El catálogo no está disponible. Intente de nuevo.",
+            statusCode: 503,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        throw err;
+      }
       const total =
         Math.round(lineas.reduce((sum, l) => sum + l.cantidad * l.precioUnitario, 0) * 100) / 100;
       const ordenId = randomUUID();

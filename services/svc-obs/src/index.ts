@@ -133,6 +133,7 @@ async function bootstrap(): Promise<void> {
   // Metrics updater (pool, outbox, SSE)
   metricsUpdater = startMetricsUpdater(metrics, "svc-obs", {
     getPoolMetrics,
+    getEventBusMetrics: () => eventBus.getMetrics(),
     getOutboxPending: async () => {
       try {
         const { rows } = await pool.query(

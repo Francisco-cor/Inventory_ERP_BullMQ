@@ -8,6 +8,8 @@ export interface ServiceMetrics {
   eventsPublished: client.Counter<string>;
   eventsConsumed: client.Counter<string>;
   eventsFailed: client.Counter<string>;
+  eventsUnsupportedVersion: client.Counter<string>;
+  eventsDlq: client.Counter<string>;
   outboxPending: client.Gauge<string>;
   outboxLag: client.Gauge<string>;
   sseClients: client.Gauge<string>;
@@ -56,6 +58,20 @@ export function createMetrics(service: string): ServiceMetrics {
     name: "events_failed_total",
     help: "Events failed (DLQ)",
     labelNames: ["event_name", "service", "error_type"] as const,
+    registers: [registry],
+  });
+
+  const eventsUnsupportedVersion = new client.Counter({
+    name: "events_unsupported_version_total",
+    help: "Events rejected because their schema version is unsupported",
+    labelNames: ["service"] as const,
+    registers: [registry],
+  });
+
+  const eventsDlq = new client.Counter({
+    name: "events_dlq_total",
+    help: "Events moved permanently to the DLQ",
+    labelNames: ["service"] as const,
     registers: [registry],
   });
 
@@ -123,6 +139,8 @@ export function createMetrics(service: string): ServiceMetrics {
     eventsPublished,
     eventsConsumed,
     eventsFailed,
+    eventsUnsupportedVersion,
+    eventsDlq,
     outboxPending,
     outboxLag,
     sseClients,
@@ -184,6 +202,13 @@ export function startMetricsUpdater(
     getOutboxPending?: () => Promise<number>;
     getOutboxLag?: () => Promise<number>;
     getSseClients?: () => number;
+    getEventBusMetrics?: () => {
+      published: number;
+      consumed: number;
+      failed: number;
+      unsupportedVersion: number;
+      dlq: number;
+    };
   },
   intervalMs = 5000
 ): NodeJS.Timeout {
@@ -206,8 +231,53 @@ export function startMetricsUpdater(
       if (getters.getSseClients) {
         metrics.sseClients.set({ service }, getters.getSseClients());
       }
+      if (getters.getEventBusMetrics) {
+        const current = getters.getEventBusMetrics();
+        const previous = eventBusMetricSnapshots.get(service) ?? {
+          published: 0,
+          consumed: 0,
+          failed: 0,
+          unsupportedVersion: 0,
+          dlq: 0,
+        };
+        incrementCounter(
+          metrics.eventsPublished,
+          { event_name: "unknown", service },
+          current.published - previous.published
+        );
+        incrementCounter(
+          metrics.eventsConsumed,
+          { event_name: "unknown", service },
+          current.consumed - previous.consumed
+        );
+        incrementCounter(
+          metrics.eventsFailed,
+          { event_name: "unknown", service, error_type: "bus" },
+          current.failed - previous.failed
+        );
+        incrementCounter(
+          metrics.eventsUnsupportedVersion,
+          { service },
+          current.unsupportedVersion - previous.unsupportedVersion
+        );
+        incrementCounter(metrics.eventsDlq, { service }, current.dlq - previous.dlq);
+        eventBusMetricSnapshots.set(service, current);
+      }
     } catch {
       // ignore updater errors
     }
   }, intervalMs);
+}
+
+const eventBusMetricSnapshots = new Map<
+  string,
+  { published: number; consumed: number; failed: number; unsupportedVersion: number; dlq: number }
+>();
+
+function incrementCounter(
+  counter: client.Counter<string>,
+  labels: Record<string, string>,
+  delta: number
+): void {
+  if (delta > 0) counter.inc(labels, delta);
 }

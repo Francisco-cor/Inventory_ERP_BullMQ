@@ -26,6 +26,7 @@ const BASE = __ENV.ERP_BASE_URL || "http://localhost:80";
 const API_KEY = __ENV.ERP_API_KEY || "";
 const PRODUCTO_ID = __ENV.PRODUCTO_ID || "11111111-1111-4111-8111-111111111001";
 const SKU = __ENV.SKU || "SKU-SEED-001";
+const PRECIO_UNITARIO = Number(__ENV.PRECIO_UNITARIO || 89.99);
 
 function pollOrder(ordenId, maxMs = 15000) {
   const deadline = Date.now() + maxMs;
@@ -50,7 +51,7 @@ export default function () {
   // 1. Crear orden con Idempotency-Key (Fase 2)
   const idempotencyKey = `load-${__VU}-${__ITER}-${Date.now()}`;
   const payload = JSON.stringify({
-    lineas: [{ productoId: PRODUCTO_ID, sku: SKU, cantidad: 1, precioUnitario: 10 }],
+    lineas: [{ productoId: PRODUCTO_ID, sku: SKU, cantidad: 1, precioUnitario: PRECIO_UNITARIO }],
   });
   const start = Date.now();
   const res = http.post(`${BASE}/api/v1/ordenes`, payload, {

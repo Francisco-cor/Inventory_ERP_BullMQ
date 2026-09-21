@@ -11,6 +11,11 @@ const migrations = [
   { version: "002_idempotency", file: "002_idempotency.sql", downFile: "002_idempotency_down.sql" },
   { version: "003_outbox", file: "003_outbox.sql", downFile: "003_outbox_down.sql" },
   { version: "004_indexes", file: "004_indexes.sql", downFile: "004_indexes_down.sql" },
+  {
+    version: "005_outbox_leases",
+    file: "005_outbox_leases.sql",
+    downFile: "005_outbox_leases_down.sql",
+  },
 ];
 
 const migrator = createMigrator({ migrations, migrationsDir, lockKey: 1002 });
