@@ -9,7 +9,7 @@
     "build": "tsc -b",
     "start": "node dist/index.js",
     "type-check": "tsc -b",
-    "test": "vitest run --passWithNoTests src/domain",
+    "test": "vitest run --passWithNoTests src",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests src/domain",
     "test:unit": "vitest run --passWithNoTests src/domain",

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
 import { eventBus } from "./bus.js";
+import { evaluarReserva, tipoAlertaStock } from "../domain/stock-policy.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
@@ -95,7 +96,8 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
         [linea.productoId]
       );
 
-      if (rows.length === 0 || rows[0].disponible < linea.cantidad) {
+      const decision = evaluarReserva(rows[0]?.disponible ?? 0, linea.cantidad);
+      if (rows.length === 0 || !decision.suficiente) {
         // Roll back only the stock changes; keep the idempotency record.
         await client.query("ROLLBACK TO SAVEPOINT pre_reservation");
         await client.query("RELEASE SAVEPOINT pre_reservation");
@@ -158,7 +160,8 @@ async function onOrdenCreada(event: DomainEvent<OrdenCreadaPayload>): Promise<vo
         [linea.productoId]
       );
       if (s.length > 0 && s[0].disponible < STOCK_UMBRAL) {
-        const tipo = s[0].disponible === 0 ? "stock_agotado" : "stock_bajo";
+        const tipo = tipoAlertaStock(s[0].disponible, STOCK_UMBRAL);
+        if (!tipo) continue;
         await client.query(
           `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
            VALUES ($1, $2, $3, $4, $5)

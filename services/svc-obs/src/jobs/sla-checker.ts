@@ -4,6 +4,7 @@ import { EVENTS } from "@erp/event-bus";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
 import { config } from "../config.js";
+import { segundosPendiente } from "./sla-policy.js";
 
 const SLA_THRESHOLD_SECONDS = config.SLA_THRESHOLD_SECONDS;
 const CHECK_INTERVAL_MS = config.SLA_CHECK_INTERVAL_MS;
@@ -85,7 +86,7 @@ export async function startSlaChecker(redis: { host: string; port: number }): Pr
             const alert = {
               ordenId: row.orden_id,
               creadaEn: row.creada_en.toISOString(),
-              segundosPendiente: row.segundos,
+              segundosPendiente: segundosPendiente(row.creada_en),
             };
             console.log(`[sla-checker] SLA_WARNING: orden ${row.orden_id} (${row.segundos}s)`);
             await publishEvent(EVENTS.SLA_WARNING, alert, row.orden_id, client);

@@ -11,6 +11,7 @@ import {
   removeExpiredIdempotencyKey,
   saveIdempotent,
 } from "../plugins/idempotency.js";
+import { tipoAlertaStock } from "../domain/stock-policy.js";
 
 const STOCK_UMBRAL = Number(process.env.STOCK_ALERTA_UMBRAL ?? 10);
 
@@ -21,7 +22,8 @@ async function registrarAlertaSiCorresponde(
   client?: PoolClient
 ): Promise<void> {
   if (disponible >= STOCK_UMBRAL) return;
-  const tipo = disponible === 0 ? "stock_agotado" : "stock_bajo";
+  const tipo = tipoAlertaStock(disponible, STOCK_UMBRAL);
+  if (!tipo) return;
   await (client ?? pool).query(
     `INSERT INTO alertas_stock (producto_id, sku, nivel_actual, umbral, tipo)
      VALUES ($1, $2, $3, $4, $5)
