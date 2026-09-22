@@ -6,6 +6,7 @@ import { CrearOrdenSchema } from "../domain/orden.schema.js";
 import { type EstadoOrden, puedeTransicionar, describir } from "../domain/orden.statemachine.js";
 import { requireAuth, requireRole } from "../plugins/auth.js";
 import { canonicalizarLineasDesdeCatalogoLocal } from "../catalog/catalog-read-model.js";
+import { toEventTimestamp } from "../domain/orden-event.js";
 import {
   CatalogProjectionMismatchError,
   CatalogProjectionNotReadyError,
@@ -281,8 +282,8 @@ export async function ordenesRoutes(app: FastifyInstance) {
               estado: "pendiente",
               lineas,
               total,
-              creadaEn: orden.creada_en,
-              actualizadaEn: orden.actualizada_en,
+              creadaEn: toEventTimestamp(orden.creada_en),
+              actualizadaEn: toEventTimestamp(orden.actualizada_en),
             },
           },
           correlationId,
