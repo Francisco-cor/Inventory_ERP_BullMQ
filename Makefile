@@ -81,14 +81,19 @@ migrate: ## Ejecuta migraciones en todos los servicios
 chaos: ## Chaos test — mata svc-stock mid-saga y verifica recuperación
 	@bash tests/chaos/kill-stock.sh
 
-chaos-scale: ## Verifica escalado horizontal de svc-obs (2 réplicas + SSE fan-out)
+chaos-scale: ## Verifica escalado horizontal y health de svc-obs (2 réplicas)
+	@test -n "$(ERP_API_KEY)" || (echo "ERP_API_KEY es obligatorio"; exit 1)
 	@echo "Escalando svc-obs a 2 réplicas..."
-	docker compose up -d --scale svc-obs=2
-	@sleep 5
-	@curl -s http://localhost/health | jq . || true
-	@echo "Abre 2 streams SSE y crea orden de prueba..."
-	@curl -s -X POST http://localhost/api/v1/ordenes -H "Content-Type: application/json" -d '{"lineas":[{"productoId":"11111111-1111-4111-8111-111111111001","sku":"SKU-SEED-001","cantidad":1,"precioUnitario":89.99}]}' | jq . || true
-	@echo "Verifica docker compose logs svc-obs | grep sse:broker"
+	ADMIN_API_KEY="$(ERP_API_KEY)" docker compose up -d --scale svc-obs=2
+	@for i in $$(seq 1 30); do \
+		if curl -fsS http://localhost/health | jq -e '.status == "ok" and .services["svc-obs"].sseAdapter == "redis"' >/dev/null; then exit 0; fi; \
+		if [ "$$i" -eq 30 ]; then echo "Health agregado no llegó a OK"; exit 1; fi; \
+		sleep 2; \
+	done
+	@replicas=$$(docker compose ps --format '{{.Name}}' svc-obs | wc -l); \
+		test "$$replicas" -eq 2 || (echo "Se esperaban 2 réplicas de svc-obs, se encontraron $$replicas"; exit 1)
+	@echo "PASS: 2 réplicas healthy con SSE_ADAPTER=redis"
+	@echo "Para probar fan-out SSE entre clientes, sigue docs/runbook.md#escalado-horizontal."
 
 obs-up: ## Levanta stack de observabilidad (Prometheus, Grafana, Loki, Tempo)
 	docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
