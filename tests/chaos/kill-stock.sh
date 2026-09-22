@@ -7,8 +7,16 @@ set -e
 # Criterio: orden con stock insuficiente debe compensar a cancelled aunque svc-stock haya caído 5s mid-proceso
 
 API="http://localhost"
-PRODUCTO_ID="11111111-1111-4111-8111-111111111001"
-SKU="SKU-SEED-001"
+API="${ERP_BASE_URL:-$API}"
+API_KEY="${ERP_API_KEY:-${ADMIN_API_KEY:-}}"
+PRODUCTO_ID="${PRODUCTO_ID:-11111111-1111-4111-8111-111111111001}"
+SKU="${SKU:-SKU-SEED-001}"
+SEED_PRICE="${SEED_PRICE:-89.99}"
+
+if [ -z "$API_KEY" ]; then
+  echo "[chaos] ERP_API_KEY o ADMIN_API_KEY es obligatorio"
+  exit 1
+fi
 
 echo "[chaos] Verificando stack..."
 for svc in productos ordenes stock obs; do
@@ -18,7 +26,10 @@ for svc in productos ordenes stock obs; do
 done
 
 echo "[chaos] Creando orden con stock suficiente (2x $SKU)..."
-ORDEN_RESP=$(curl -s -X POST "$API/api/v1/ordenes" -H "Content-Type: application/json" -d "{\"lineas\":[{\"productoId\":\"$PRODUCTO_ID\",\"sku\":\"$SKU\",\"cantidad\":2,\"precioUnitario\":89.99}]}")
+ORDEN_RESP=$(curl -s -X POST "$API/api/v1/ordenes" \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $API_KEY" \
+  -d "{\"lineas\":[{\"productoId\":\"$PRODUCTO_ID\",\"sku\":\"$SKU\",\"cantidad\":2,\"precioUnitario\":$SEED_PRICE}]}")
 echo "$ORDEN_RESP" | head -c 500; echo
 ORDEN_ID=$(echo "$ORDEN_RESP" | jq -r '.data.id // .id // empty')
 if [ -z "$ORDEN_ID" ] || [ "$ORDEN_ID" = "null" ]; then
@@ -56,7 +67,7 @@ done
 
 # Verificación de SSE: al menos el orden debe haber aparecido en event_log
 echo "[chaos] Verificando event_log en svc-obs..."
-curl -s "$API/api/v1/obs/events?eventName=order.created" | jq '.data | length' || true
+curl -s -H "X-Api-Key: $API_KEY" "$API/api/v1/obs/events?eventName=order.created" | jq '.data | length' || true
 
 if [ "$FINAL" = "confirmada" ] || [ "$FINAL" = "confirmed" ]; then
   echo "[chaos] ✓ PASS — orden confirmada tras caída (resiliencia ok, outbox reintentó)"
