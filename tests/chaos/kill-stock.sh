@@ -126,9 +126,16 @@ for i in $(seq 1 10); do
   sleep 2
 done
 
-# Verificación de SSE: al menos el orden debe haber aparecido en event_log
+# Verificación de observabilidad: el orden debe haber aparecido en event_log
 echo "[chaos] Verificando event_log en svc-obs..."
-curl -s -H "X-Api-Key: $API_KEY" "$API/api/v1/obs/events?eventName=order.created" | jq '.data | length' || true
+EVENT_COUNT=$(curl -sS -H "X-Api-Key: $API_KEY" \
+  "$API/api/v1/obs/events?eventName=orden.creada" \
+  | jq --arg orden_id "$ORDEN_ID" '[.data[] | select(.payload.orden.id == $orden_id)] | length')
+echo "  eventos orden.creada para la orden: $EVENT_COUNT"
+if [ "$EVENT_COUNT" -lt 1 ]; then
+  echo "[chaos] ✗ FAIL — svc-obs no registró orden.creada para $ORDEN_ID"
+  exit 1
+fi
 
 if [ "$FINAL" = "confirmada" ] || [ "$FINAL" = "confirmed" ]; then
   echo "[chaos] ✓ PASS — orden confirmada tras caída (resiliencia ok, outbox reintentó)"
