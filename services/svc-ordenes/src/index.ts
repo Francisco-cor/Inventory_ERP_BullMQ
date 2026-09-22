@@ -54,9 +54,7 @@ async function bootstrap() {
       correlationId: correlationId ?? randomUUID(),
       requestId: requestId ?? correlationId ?? randomUUID(),
     };
-    (correlationStore as any).enterWith?.(ctx);
-    (request as any).correlationId = ctx.correlationId;
-    (request as any).requestId = ctx.requestId;
+    correlationStore.enterWith(ctx);
     reply.header("X-Correlation-Id", ctx.correlationId);
     reply.header("X-Request-Id", ctx.requestId);
   });

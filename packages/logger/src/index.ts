@@ -68,6 +68,16 @@ export interface CreateLoggerOptions {
   pretty?: boolean;
 }
 
+interface CorrelationRequest {
+  headers: Record<string, unknown>;
+  correlationId?: string;
+  requestId?: string;
+}
+
+interface CorrelationReply {
+  header(name: string, value: string): CorrelationReply;
+}
+
 /**
  * Logger pino JSON estructurado con mixin de correlationId/requestId via AsyncLocalStorage.
  * En production emite JSON, en development usa pino-pretty si pretty=true.
@@ -114,7 +124,7 @@ export function createLogger(opts: CreateLoggerOptions) {
  *      app.addHook("onResponse", async (req, reply) => { reply.header("X-Correlation-Id", (req as any).correlationId) })
  */
 export function createCorrelationHook() {
-  return async (request: any, _reply: any) => {
+  return async (request: CorrelationRequest, _reply: CorrelationReply) => {
     const headers = request.headers as Record<string, unknown>;
     const { correlationId: incomingCid, requestId: incomingRid } =
       extractCorrelationFromHeaders(headers);

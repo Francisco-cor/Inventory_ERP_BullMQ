@@ -8,10 +8,30 @@ const clients = new Map<string, ServerResponse>();
 const CHANNEL = "sse:broadcast";
 type SseAdapter = "memory" | "redis";
 
+interface RedisConnectionOptions {
+  host: string;
+  port: number;
+  lazyConnect: boolean;
+  maxRetriesPerRequest: number;
+  password?: string;
+}
+
+interface RedisClient {
+  connect(): Promise<void>;
+  quit(): Promise<unknown>;
+  publish(channel: string, message: string): Promise<number>;
+  subscribe(channel: string): Promise<unknown>;
+  on(event: "error", listener: (error: unknown) => void): RedisClient;
+  on(event: "message", listener: (channel: string, message: string) => void): RedisClient;
+}
+
+interface RedisConstructor {
+  new (options: RedisConnectionOptions): RedisClient;
+}
+
 let adapter: SseAdapter = (process.env.SSE_ADAPTER as SseAdapter) ?? "memory";
-// use any to avoid requiring ioredis types at build time when docker does npm ci
-let pub: any | null = null;
-let sub: any | null = null;
+let pub: RedisClient | null = null;
+let sub: RedisClient | null = null;
 let initialized = false;
 
 function localBroadcast(eventType: string, data: unknown): void {
@@ -51,8 +71,10 @@ export async function initSseBroker(opts?: {
   const password = opts?.password ?? process.env.REDIS_PASSWORD;
 
   try {
-    const mod: any = await import("ioredis");
-    const Redis: any = mod.default ?? mod;
+    const mod = (await import("ioredis")) as unknown as {
+      default?: RedisConstructor;
+    };
+    const Redis = mod.default ?? (mod as unknown as RedisConstructor);
     const connection = {
       host,
       port,
@@ -63,8 +85,12 @@ export async function initSseBroker(opts?: {
     pub = new Redis(connection);
     sub = new Redis(connection);
 
-    pub.on("error", (e: any) => console.error("[sse:broker] pub redis error", e.message));
-    sub.on("error", (e: any) => console.error("[sse:broker] sub redis error", e.message));
+    pub.on("error", (e: unknown) =>
+      console.error("[sse:broker] pub redis error", e instanceof Error ? e.message : String(e))
+    );
+    sub.on("error", (e: unknown) =>
+      console.error("[sse:broker] sub redis error", e instanceof Error ? e.message : String(e))
+    );
 
     await Promise.all([pub.connect(), sub.connect()]);
     await sub.subscribe(CHANNEL);

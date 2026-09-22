@@ -5,6 +5,7 @@ import type {
   StockInsuficientePayload,
 } from "@erp/shared-types";
 import { z } from "zod";
+import type { PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "./publisher.js";
 import { eventBus } from "./bus.js";
@@ -52,7 +53,7 @@ function validateOrThrow<T>(schema: z.ZodSchema<T>, payload: unknown, eventName:
 }
 
 async function isAlreadyProcessed(
-  client: import("pg").PoolClient,
+  client: PoolClient,
   eventId: string,
   eventName: string
 ): Promise<boolean> {
@@ -65,7 +66,7 @@ async function isAlreadyProcessed(
 
 async function storeCatalogEvent(
   event: DomainEvent,
-  apply: (client: import("pg").PoolClient) => Promise<void>
+  apply: (client: PoolClient) => Promise<void>
 ): Promise<void> {
   const client = await pool.connect();
   try {

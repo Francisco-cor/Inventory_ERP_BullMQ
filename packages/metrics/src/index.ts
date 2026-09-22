@@ -1,5 +1,7 @@
 import client from "prom-client";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+type MetricsRequest = FastifyRequest & { __metricsStart?: bigint };
 
 export interface ServiceMetrics {
   registry: client.Registry;
@@ -198,11 +200,11 @@ export function registerHttpMetrics(
   metrics: ServiceMetrics
 ): void {
   app.addHook("onRequest", async (req) => {
-    (req as any).__metricsStart = process.hrtime.bigint();
+    (req as MetricsRequest).__metricsStart = process.hrtime.bigint();
   });
 
   app.addHook("onResponse", async (req, reply) => {
-    const start = (req as any).__metricsStart as bigint | undefined;
+    const start = (req as MetricsRequest).__metricsStart;
     const durationSec = start ? Number(process.hrtime.bigint() - start) / 1e9 : 0;
     const route = (req.routeOptions?.url ?? req.url.split("?")[0]) || "unknown";
     const labels = {
@@ -221,7 +223,7 @@ export function registerHttpMetrics(
  * Protegido opcionalmente por ADMIN_API_KEY en prod (se deja abierto para Prometheus interno).
  */
 export function createMetricsHandler(metrics: ServiceMetrics) {
-  return async (_req: any, reply: any) => {
+  return async (_req: FastifyRequest, reply: FastifyReply) => {
     reply.header("Content-Type", metrics.registry.contentType);
     return reply.send(await metrics.registry.metrics());
   };
