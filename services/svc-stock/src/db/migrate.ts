@@ -25,6 +25,11 @@ const migrations = [
     file: "007_outbox_leases.sql",
     downFile: "007_outbox_leases_down.sql",
   },
+  {
+    version: "008_outbox_deliveries",
+    file: "008_outbox_deliveries.sql",
+    downFile: "008_outbox_deliveries_down.sql",
+  },
 ];
 
 const migrator = createMigrator({ migrations, migrationsDir, lockKey: 1003 });
