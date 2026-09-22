@@ -54,7 +54,11 @@ describe("producto.schema", () => {
 
     it("rechaza precio no numérico", () => {
       expect(
-        CrearProductoSchema.safeParse({ sku: "A", nombre: "B", precio: "10" as any }).success
+        CrearProductoSchema.safeParse({
+          sku: "A",
+          nombre: "B",
+          precio: "10" as unknown as number,
+        }).success
       ).toBe(false);
     });
   });
