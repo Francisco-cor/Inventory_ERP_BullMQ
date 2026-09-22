@@ -150,6 +150,21 @@ async function bootstrap() {
         return 0;
       }
     },
+    getOutboxDeliveryMetrics: async () => {
+      try {
+        const { rows } = await pool.query(
+          `SELECT destination,
+                  COUNT(*) FILTER (WHERE estado = 'pending' AND published_at IS NULL)::int AS pending,
+                  COALESCE(EXTRACT(EPOCH FROM (NOW() - MIN(created_at) FILTER
+                    (WHERE estado = 'pending' AND published_at IS NULL)))::int, 0) AS "lagSeconds",
+                  COUNT(*) FILTER (WHERE estado = 'dlq')::int AS dlq
+           FROM outbox_deliveries GROUP BY destination`
+        );
+        return rows;
+      } catch {
+        return [];
+      }
+    },
   });
 
   await app.listen({ port: PORT, host: HOST });

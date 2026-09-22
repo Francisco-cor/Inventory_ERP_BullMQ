@@ -114,6 +114,7 @@ services:
       REDIS_PORT: 6379
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-30000}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
       LOG_LEVEL: info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_ENABLED: "false"
@@ -164,6 +165,7 @@ services:
       PRODUCTOS_SERVICE_URL: http://svc-productos:3001
       CATALOG_REQUEST_TIMEOUT_MS: 1500
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-30000}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
       LOG_LEVEL: info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_ENABLED: "false"
@@ -212,6 +214,7 @@ services:
       REDIS_PORT: 6379
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-30000}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
       LOG_LEVEL: info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_ENABLED: "false"
@@ -283,6 +286,7 @@ services:
       REDIS_PORT: 6379
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-30000}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-20}
       LOG_LEVEL: info
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_ENABLED: "false"

@@ -86,12 +86,22 @@ const ALL_SERVICES_DEFAULT: ServiceName[] = [
 function getAllServices(): ServiceName[] {
   const env = process.env.EVENT_BUS_SERVICES;
   if (env && env.trim().length > 0) {
-    return env
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean) as ServiceName[];
+    return [
+      ...new Set(
+        env
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean) as ServiceName[]
+      ),
+    ];
   }
   return [...ALL_SERVICES_DEFAULT];
+}
+
+export function getEventBusDestinations(sourceService?: ServiceName): ServiceName[] {
+  const destinations = getAllServices();
+  if (sourceService && !destinations.includes(sourceService)) destinations.push(sourceService);
+  return destinations;
 }
 
 function queueName(service: ServiceName): string {
@@ -202,7 +212,7 @@ export function createEventBus(config: EventBusConfig) {
     };
 
     // Fan-out: deliver to every service queue concurrently (dynamic)
-    const targetServices = getAllServices();
+    const targetServices = getEventBusDestinations(serviceName);
     await Promise.all(
       targetServices.map((s) => {
         let q = publishQueues.get(s);
@@ -223,7 +233,31 @@ export function createEventBus(config: EventBusConfig) {
     return event.id;
   }
 
-  // Publish a pre-constructed DomainEvent (used by outbox relay to preserve id/timestamp)
+  async function enqueueToDestination(event: DomainEvent, destination: ServiceName): Promise<void> {
+    let q = publishQueues.get(destination);
+    if (!q) {
+      q = new Queue(queueName(destination), { connection });
+      publishQueues.set(destination, q);
+    }
+    await q.add(event.name, event, { ...JOB_OPTIONS, jobId: event.id });
+  }
+
+  // Publish a pre-constructed DomainEvent to one destination (used by the durable outbox relay).
+  async function publishRawToDestination(
+    event: DomainEvent,
+    destination: ServiceName
+  ): Promise<void> {
+    validateEventPayload(event.name, event.payload);
+    if (event.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+      throw new Error(
+        `ValidationError: cannot publishRaw with schemaVersion ${event.schemaVersion}`
+      );
+    }
+    await enqueueToDestination(event, destination);
+    metrics.published += 1;
+  }
+
+  // Publish a pre-constructed DomainEvent to every configured destination.
   async function publishRaw(event: DomainEvent): Promise<void> {
     validateEventPayload(event.name, event.payload);
     if (event.schemaVersion !== CURRENT_SCHEMA_VERSION) {
@@ -231,16 +265,10 @@ export function createEventBus(config: EventBusConfig) {
         `ValidationError: cannot publishRaw with schemaVersion ${event.schemaVersion}`
       );
     }
-    const targetServices = getAllServices();
     await Promise.all(
-      targetServices.map((s) => {
-        let q = publishQueues.get(s);
-        if (!q) {
-          q = new Queue(queueName(s), { connection });
-          publishQueues.set(s, q);
-        }
-        return q.add(event.name, event, { ...JOB_OPTIONS, jobId: event.id });
-      })
+      getEventBusDestinations(serviceName).map((destination) =>
+        enqueueToDestination(event, destination)
+      )
     );
     metrics.published += 1;
   }
@@ -300,6 +328,8 @@ export function createEventBus(config: EventBusConfig) {
   return {
     publish,
     publishRaw,
+    publishRawToDestination,
+    getDestinations: () => getEventBusDestinations(serviceName),
     subscribe,
     startWorker,
     getFailedJobs,

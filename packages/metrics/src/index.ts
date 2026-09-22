@@ -12,6 +12,9 @@ export interface ServiceMetrics {
   eventsDlq: client.Counter<string>;
   outboxPending: client.Gauge<string>;
   outboxLag: client.Gauge<string>;
+  outboxDeliveryPending: client.Gauge<string>;
+  outboxDeliveryLag: client.Gauge<string>;
+  outboxDeliveryDlq: client.Gauge<string>;
   sseClients: client.Gauge<string>;
   dbPoolTotal: client.Gauge<string>;
   dbPoolIdle: client.Gauge<string>;
@@ -89,6 +92,27 @@ export function createMetrics(service: string): ServiceMetrics {
     registers: [registry],
   });
 
+  const outboxDeliveryPending = new client.Gauge({
+    name: "outbox_delivery_pending",
+    help: "Pending outbox deliveries by destination",
+    labelNames: ["service", "destination"] as const,
+    registers: [registry],
+  });
+
+  const outboxDeliveryLag = new client.Gauge({
+    name: "outbox_delivery_lag_seconds",
+    help: "Age of the oldest pending outbox delivery by destination",
+    labelNames: ["service", "destination"] as const,
+    registers: [registry],
+  });
+
+  const outboxDeliveryDlq = new client.Gauge({
+    name: "outbox_delivery_dlq",
+    help: "Outbox deliveries in the service-owned DLQ by destination",
+    labelNames: ["service", "destination"] as const,
+    registers: [registry],
+  });
+
   const sseClients = new client.Gauge({
     name: "sse_clients",
     help: "Connected SSE clients",
@@ -143,6 +167,9 @@ export function createMetrics(service: string): ServiceMetrics {
     eventsDlq,
     outboxPending,
     outboxLag,
+    outboxDeliveryPending,
+    outboxDeliveryLag,
+    outboxDeliveryDlq,
     sseClients,
     dbPoolTotal,
     dbPoolIdle,
@@ -201,6 +228,9 @@ export function startMetricsUpdater(
     getPoolMetrics?: () => { totalCount: number; idleCount: number; waitingCount: number };
     getOutboxPending?: () => Promise<number>;
     getOutboxLag?: () => Promise<number>;
+    getOutboxDeliveryMetrics?: () => Promise<
+      Array<{ destination: string; pending: number; lagSeconds: number; dlq: number }>
+    >;
     getSseClients?: () => number;
     getEventBusMetrics?: () => {
       published: number;
@@ -227,6 +257,15 @@ export function startMetricsUpdater(
       if (getters.getOutboxLag) {
         const lag = await getters.getOutboxLag();
         metrics.outboxLag.set({ service }, lag);
+      }
+      if (getters.getOutboxDeliveryMetrics) {
+        const deliveryMetrics = await getters.getOutboxDeliveryMetrics();
+        for (const delivery of deliveryMetrics) {
+          const labels = { service, destination: delivery.destination };
+          metrics.outboxDeliveryPending.set(labels, delivery.pending);
+          metrics.outboxDeliveryLag.set(labels, delivery.lagSeconds);
+          metrics.outboxDeliveryDlq.set(labels, delivery.dlq);
+        }
       }
       if (getters.getSseClients) {
         metrics.sseClients.set({ service }, getters.getSseClients());
