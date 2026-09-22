@@ -19,6 +19,8 @@ RUN npm ci --workspaces --include-workspace-root
 FROM deps AS build-shared
 COPY packages/shared-types ./packages/shared-types
 RUN npm run build --workspace=packages/shared-types
+COPY packages/logger ./packages/logger
+RUN npm run build --workspace=@erp/logger
 COPY packages/event-bus ./packages/event-bus
 RUN npm run build --workspace=packages/event-bus
 COPY packages/env ./packages/env
@@ -29,8 +31,6 @@ COPY packages/db-migrate ./packages/db-migrate
 RUN npm run build --workspace=@erp/db-migrate
 COPY packages/resilience ./packages/resilience
 RUN npm run build --workspace=@erp/resilience
-COPY packages/logger ./packages/logger
-RUN npm run build --workspace=@erp/logger
 COPY packages/metrics ./packages/metrics
 RUN npm run build --workspace=@erp/metrics
 COPY packages/tracing ./packages/tracing
