@@ -44,13 +44,13 @@ export async function healthRoutes(app: FastifyInstance) {
 
       try {
         await pool.query("SELECT 1");
-      } catch (err) {
+      } catch {
         dbStatus = "error";
       }
 
       try {
         await eventBus.ping();
-      } catch (err) {
+      } catch {
         redisStatus = "error";
       }
 

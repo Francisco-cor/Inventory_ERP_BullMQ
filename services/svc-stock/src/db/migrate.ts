@@ -1,6 +1,5 @@
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type pg from "pg";
 import { createMigrator } from "@erp/db-migrate";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

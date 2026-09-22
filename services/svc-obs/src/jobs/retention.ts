@@ -1,8 +1,6 @@
 import { pool } from "../db/pool.js";
 
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? 90);
-const BATCH_SIZE = 1000;
-
 export async function runRetention(): Promise<number> {
   let total = 0;
   // event_log
