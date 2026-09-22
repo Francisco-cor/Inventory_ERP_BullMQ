@@ -5,11 +5,11 @@ import { publishEvent, EVENTS } from "../events/publisher.js";
 import { CrearOrdenSchema } from "../domain/orden.schema.js";
 import { type EstadoOrden, puedeTransicionar, describir } from "../domain/orden.statemachine.js";
 import { requireAuth, requireRole } from "../plugins/auth.js";
+import { canonicalizarLineasDesdeCatalogoLocal } from "../catalog/catalog-read-model.js";
 import {
-  canonicalizarLineas,
-  CatalogMismatchError,
-  CatalogUnavailableError,
-} from "../catalog/catalog-client.js";
+  CatalogProjectionMismatchError,
+  CatalogProjectionNotReadyError,
+} from "../catalog/catalog-policy.js";
 import {
   getIdempotent,
   hashBody,
@@ -201,11 +201,11 @@ export async function ordenesRoutes(app: FastifyInstance) {
         });
       }
 
-      let lineas: typeof parsed.data.lineas;
+      let lineas: Array<(typeof parsed.data.lineas)[number] & { versionPrecio: number }>;
       try {
-        lineas = await canonicalizarLineas(parsed.data.lineas);
+        lineas = await canonicalizarLineasDesdeCatalogoLocal(parsed.data.lineas);
       } catch (err) {
-        if (err instanceof CatalogMismatchError) {
+        if (err instanceof CatalogProjectionMismatchError) {
           return reply.status(409).send({
             error: "CatalogConflict",
             message: err.message,
@@ -213,10 +213,10 @@ export async function ordenesRoutes(app: FastifyInstance) {
             timestamp: new Date().toISOString(),
           });
         }
-        if (err instanceof CatalogUnavailableError) {
+        if (err instanceof CatalogProjectionNotReadyError) {
           return reply.status(503).send({
-            error: "CatalogUnavailable",
-            message: "El catálogo no está disponible. Intente de nuevo.",
+            error: "CatalogProjectionNotReady",
+            message: "La proyección local de catálogo aún no está disponible. Intente de nuevo.",
             statusCode: 503,
             timestamp: new Date().toISOString(),
           });
@@ -258,9 +258,17 @@ export async function ordenesRoutes(app: FastifyInstance) {
 
         for (const linea of lineas) {
           await client.query(
-            `INSERT INTO lineas_orden (orden_id, producto_id, sku, cantidad, precio_unitario)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [ordenId, linea.productoId, linea.sku, linea.cantidad, linea.precioUnitario]
+            `INSERT INTO lineas_orden
+               (orden_id, producto_id, sku, cantidad, precio_unitario, version_precio)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              ordenId,
+              linea.productoId,
+              linea.sku,
+              linea.cantidad,
+              linea.precioUnitario,
+              linea.versionPrecio,
+            ]
           );
         }
 
