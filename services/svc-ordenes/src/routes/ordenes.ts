@@ -247,7 +247,7 @@ export async function ordenesRoutes(app: FastifyInstance) {
                 timestamp: new Date().toISOString(),
               });
             }
-            return reply.status(cached.status).send(cached.body);
+            return reply.status(cached.status === 201 ? 200 : cached.status).send(cached.body);
           }
         }
 
