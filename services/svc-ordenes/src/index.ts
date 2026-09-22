@@ -132,7 +132,7 @@ async function bootstrap() {
     getOutboxPending: async () => {
       try {
         const { rows } = await pool.query(
-          "SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL"
+          "SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL AND estado = 'pending'"
         );
         return rows[0].pending as number;
       } catch {
@@ -142,7 +142,7 @@ async function bootstrap() {
     getOutboxLag: async () => {
       try {
         const { rows } = await pool.query(
-          "SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::int AS lag FROM outbox WHERE published_at IS NULL"
+          "SELECT EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::int AS lag FROM outbox WHERE published_at IS NULL AND estado = 'pending'"
         );
         return (rows[0].lag as number) ?? 0;
       } catch {

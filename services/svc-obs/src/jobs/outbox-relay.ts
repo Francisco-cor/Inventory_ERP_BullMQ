@@ -139,11 +139,21 @@ async function markPublished(row: DeliveryRow): Promise<void> {
        WHERE outbox_id = $1 AND destination = $2 AND lease_token = $3
        RETURNING outbox_id
      )
-     UPDATE outbox o SET published_at = NOW(), estado = 'published', attempts = attempts + 1
+     UPDATE outbox o
+     SET estado = CASE
+           WHEN EXISTS (SELECT 1 FROM outbox_deliveries x WHERE x.outbox_id = o.id AND x.estado = 'dlq')
+             THEN 'failed'
+           ELSE 'published'
+         END,
+         published_at = CASE
+           WHEN EXISTS (SELECT 1 FROM outbox_deliveries x WHERE x.outbox_id = o.id AND x.estado = 'dlq')
+             THEN o.published_at
+           ELSE NOW()
+         END,
+         attempts = attempts + 1
      FROM delivered d
      WHERE o.id = d.outbox_id
-       AND NOT EXISTS (SELECT 1 FROM outbox_deliveries p WHERE p.outbox_id = o.id AND p.published_at IS NULL AND p.estado = 'pending')
-       AND NOT EXISTS (SELECT 1 FROM outbox_deliveries x WHERE x.outbox_id = o.id AND x.estado = 'dlq')`,
+       AND NOT EXISTS (SELECT 1 FROM outbox_deliveries p WHERE p.outbox_id = o.id AND p.published_at IS NULL AND p.estado = 'pending')`,
     [row.id, row.destination, row.leaseToken]
   );
 }

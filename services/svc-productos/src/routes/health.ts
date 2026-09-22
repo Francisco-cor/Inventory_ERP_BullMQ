@@ -56,7 +56,7 @@ export async function healthRoutes(app: FastifyInstance) {
 
       try {
         const { rows } = await pool.query(
-          `SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL`
+          `SELECT COUNT(*)::int AS pending FROM outbox WHERE published_at IS NULL AND estado = 'pending'`
         );
         outboxPending = rows[0].pending;
       } catch {
