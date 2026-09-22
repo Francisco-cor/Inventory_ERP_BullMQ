@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import { requireAdmin } from "../plugins/auth.js";
 
 export async function registerSwagger(app: FastifyInstance) {
   await app.register(swagger, {
@@ -17,5 +18,6 @@ export async function registerSwagger(app: FastifyInstance) {
   await app.register(swaggerUi, {
     routePrefix: "/docs",
     uiConfig: { docExpansion: "list" },
+    uiHooks: { preHandler: requireAdmin },
   });
 }

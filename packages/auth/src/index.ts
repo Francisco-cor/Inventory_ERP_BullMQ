@@ -205,3 +205,10 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   }
   return requireApiKey(request, reply);
 }
+
+/** Auth combinada con autorización de administrador para superficies operativas. */
+export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireAuth(request, reply);
+  if (reply.sent) return;
+  return requireRole("admin")(request, reply);
+}

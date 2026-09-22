@@ -1,1 +1,1 @@
-export { requireApiKey, requireJwt, requireRole, requireAuth } from "@erp/auth";
+export { requireApiKey, requireJwt, requireRole, requireAuth, requireAdmin } from "@erp/auth";

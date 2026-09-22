@@ -23,6 +23,7 @@ import {
   startMetricsUpdater,
 } from "@erp/metrics";
 import { initTracing, shutdownTracing } from "@erp/tracing";
+import { requireAdmin } from "./plugins/auth.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -117,7 +118,10 @@ async function bootstrap() {
       },
     });
     createBullBoard({ queues: [new BullMQAdapter(q)], serverAdapter });
-    await app.register(serverAdapter.registerPlugin(), { prefix: "/admin/queues" });
+    await app.register(async (adminApp) => {
+      adminApp.addHook("preHandler", requireAdmin);
+      await adminApp.register(serverAdapter.registerPlugin(), { prefix: "/admin/queues" });
+    });
     app.log.info("Bull Board registered at /admin/queues");
   } catch (e) {
     app.log.warn({ err: e }, "Bull Board not available");
