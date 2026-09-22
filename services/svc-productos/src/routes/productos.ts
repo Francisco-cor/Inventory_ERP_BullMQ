@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { publishEvent } from "../events/publisher.js";
 import { CrearProductoSchema, ActualizarProductoSchema } from "../domain/producto.schema.js";
+import { toProductoCreadoEvent } from "../domain/producto-event.js";
 import { requireAuth, requireRole } from "../plugins/auth.js";
 
 export async function productosRoutes(app: FastifyInstance) {
@@ -134,7 +135,12 @@ export async function productosRoutes(app: FastifyInstance) {
           [id, sku, nombre, descripcion ?? null, precio, unidad]
         );
         const producto = rows[0];
-        await publishEvent("producto.creado", { producto }, correlationId, client);
+        await publishEvent(
+          "producto.creado",
+          toProductoCreadoEvent(producto),
+          correlationId,
+          client
+        );
         await client.query("COMMIT");
         return reply.status(201).send({ data: producto });
       } catch (err) {
