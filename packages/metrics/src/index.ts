@@ -19,6 +19,7 @@ export interface ServiceMetrics {
   dbPoolTotal: client.Gauge<string>;
   dbPoolIdle: client.Gauge<string>;
   dbPoolWaiting: client.Gauge<string>;
+  dbBreakerState: client.Gauge<string>;
   slaWarnings: client.Counter<string>;
   orderConfirmationLatency: client.Histogram<string>;
 }
@@ -141,6 +142,13 @@ export function createMetrics(service: string): ServiceMetrics {
     registers: [registry],
   });
 
+  const dbBreakerState = new client.Gauge({
+    name: "db_breaker_state",
+    help: "Current database circuit breaker state (one for the active state)",
+    labelNames: ["service", "state"] as const,
+    registers: [registry],
+  });
+
   const slaWarnings = new client.Counter({
     name: "sla_warnings_total",
     help: "SLA warnings generated",
@@ -174,6 +182,7 @@ export function createMetrics(service: string): ServiceMetrics {
     dbPoolTotal,
     dbPoolIdle,
     dbPoolWaiting,
+    dbBreakerState,
     slaWarnings,
     orderConfirmationLatency,
   };
@@ -225,7 +234,12 @@ export function startMetricsUpdater(
   metrics: ServiceMetrics,
   service: string,
   getters: {
-    getPoolMetrics?: () => { totalCount: number; idleCount: number; waitingCount: number };
+    getPoolMetrics?: () => {
+      totalCount: number;
+      idleCount: number;
+      waitingCount: number;
+      breakerState?: string;
+    };
     getOutboxPending?: () => Promise<number>;
     getOutboxLag?: () => Promise<number>;
     getOutboxDeliveryMetrics?: () => Promise<
@@ -249,6 +263,11 @@ export function startMetricsUpdater(
         metrics.dbPoolTotal.set({ service }, p.totalCount);
         metrics.dbPoolIdle.set({ service }, p.idleCount);
         metrics.dbPoolWaiting.set({ service }, p.waitingCount);
+        if (p.breakerState) {
+          for (const state of ["closed", "open", "half_open"]) {
+            metrics.dbBreakerState.set({ service, state }, p.breakerState === state ? 1 : 0);
+          }
+        }
       }
       if (getters.getOutboxPending) {
         const pending = await getters.getOutboxPending();

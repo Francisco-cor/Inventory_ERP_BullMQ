@@ -1,8 +1,8 @@
 import pg from "pg";
-import { waitForWithJitter, CircuitBreaker } from "@erp/resilience";
+import { isInfrastructureFailure, waitForWithJitter, CircuitBreaker } from "@erp/resilience";
 import { config } from "../config.js";
 
-export const pool = new pg.Pool({
+const rawPool = new pg.Pool({
   connectionString: config.DATABASE_URL,
   max: Number(process.env.DB_POOL_MAX ?? 10),
   idleTimeoutMillis: 30_000,
@@ -16,13 +16,39 @@ export const dbBreaker = new CircuitBreaker({
   failureThreshold: 5,
   resetTimeoutMs: 10_000,
   halfOpenMaxCalls: 2,
+  failurePredicate: isInfrastructureFailure,
 });
 
-pool.on("error", (err) => {
+function protectClient(client: pg.PoolClient): pg.PoolClient {
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property === "query") {
+        const query = target.query.bind(target) as (...queryArgs: unknown[]) => Promise<unknown>;
+        return (...args: unknown[]) => dbBreaker.exec(() => query(...args));
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }) as pg.PoolClient;
+}
+
+export const pool = new Proxy(rawPool, {
+  get(target, property, receiver) {
+    if (property === "query") {
+      const query = target.query.bind(target) as (...queryArgs: unknown[]) => Promise<unknown>;
+      return (...args: unknown[]) => dbBreaker.exec(() => query(...args));
+    }
+    if (property === "connect") {
+      return () => dbBreaker.exec(async () => protectClient(await target.connect()));
+    }
+    return Reflect.get(target, property, receiver);
+  },
+}) as pg.Pool;
+
+rawPool.on("error", (err) => {
   console.error("[db] Unexpected error on idle client:", err);
 });
 
-pool.on("connect", (client) => {
+rawPool.on("connect", (client) => {
   void client.query(
     `SET statement_timeout = '${Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 5000)}'`
   );
@@ -35,7 +61,7 @@ export async function waitForDatabase(retries = 20, baseDelayMs = 500): Promise<
   try {
     await waitForWithJitter(
       async () => {
-        const client = await pool.connect();
+        const client = await rawPool.connect();
         try {
           await client.query("SELECT 1");
         } finally {

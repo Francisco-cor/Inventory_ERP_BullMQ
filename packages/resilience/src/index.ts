@@ -67,6 +67,7 @@ export interface CircuitOptions {
   resetTimeoutMs?: number; // tiempo en open antes de half_open (default 10000)
   halfOpenMaxCalls?: number; // calls permitidas en half_open (default 2)
   successThreshold?: number; // successes en half_open para cerrar (default 2)
+  failurePredicate?: (error: unknown) => boolean; // qué errores cuentan como fallo
 }
 
 export class CircuitBreaker {
@@ -80,12 +81,14 @@ export class CircuitBreaker {
   private readonly resetTimeoutMs: number;
   private readonly halfOpenMaxCalls: number;
   private readonly successThreshold: number;
+  private readonly failurePredicate: (error: unknown) => boolean;
 
   constructor(opts: CircuitOptions = {}) {
     this.failureThreshold = opts.failureThreshold ?? 5;
     this.resetTimeoutMs = opts.resetTimeoutMs ?? 10_000;
     this.halfOpenMaxCalls = opts.halfOpenMaxCalls ?? 2;
     this.successThreshold = opts.successThreshold ?? 2;
+    this.failurePredicate = opts.failurePredicate ?? (() => true);
   }
 
   getState(): CircuitState {
@@ -114,7 +117,8 @@ export class CircuitBreaker {
     }
   }
 
-  private recordFailure(): void {
+  private recordFailure(error: unknown): void {
+    if (!this.failurePredicate(error)) return;
     if (this.state === "half_open") {
       this.state = "open";
       this.openedAt = Date.now();
@@ -147,7 +151,7 @@ export class CircuitBreaker {
       this.recordSuccess();
       return res;
     } catch (e) {
-      this.recordFailure();
+      this.recordFailure(e);
       throw e;
     }
   }
@@ -161,6 +165,22 @@ export class CircuitOpenError extends Error {
     super(message);
     this.name = "CircuitOpenError";
   }
+}
+
+/** Errores que indican que el recurso de infraestructura no está disponible. */
+export function isInfrastructureFailure(error: unknown): boolean {
+  const value = error as { code?: unknown; message?: unknown };
+  const code = typeof value?.code === "string" ? value.code : "";
+  if (
+    code.startsWith("08") ||
+    ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EPIPE"].includes(code)
+  ) {
+    return true;
+  }
+  const message = typeof value?.message === "string" ? value.message : String(error);
+  return /connection (terminated|refused|reset)|connect e|timeout|network is unreachable/i.test(
+    message
+  );
 }
 
 /**
