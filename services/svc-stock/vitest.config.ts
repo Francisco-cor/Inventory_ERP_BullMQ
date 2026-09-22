@@ -5,7 +5,6 @@ export default defineConfig({
     include: ["src/**/*.spec.ts", "test/**/*.spec.ts"],
     environment: "node",
     globals: true,
-    passWithNoTests: true,
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",

@@ -11,11 +11,11 @@
     "migrate": "node-pg-migrate -d $DATABASE_URL -m migrations up",
     "type-check": "tsc -b",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests src/domain",
+    "test": "vitest run src/domain",
     "seed": "tsx src/seed.ts",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --passWithNoTests src/domain",
-    "test:unit": "vitest run --passWithNoTests src/domain",
+    "test:coverage": "vitest run --coverage src/domain",
+    "test:unit": "vitest run src/domain",
     "test:integration": "vitest run test/integration"
   },
   "dependencies": {

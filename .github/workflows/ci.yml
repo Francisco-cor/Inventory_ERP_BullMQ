@@ -60,11 +60,11 @@ jobs:
       - run: npm ci
       - name: Run unit tests and coverage
         run: |
-          npm run test --workspace=@erp/svc-ordenes -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests
-          npm run test --workspace=@erp/svc-productos -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests
+          npm run test --workspace=@erp/svc-ordenes -- --coverage --coverage.reportsDirectory=coverage
+          npm run test --workspace=@erp/svc-productos -- --coverage --coverage.reportsDirectory=coverage
           npm run test --workspace=@erp/svc-stock -- --coverage --coverage.reportsDirectory=coverage
           npm run test:coverage --workspace=@erp/svc-obs
-          npx vitest run tests/contract --run --passWithNoTests
+          npx vitest run tests/contract --run
       - name: Check coverage artifacts (80% domain suites)
         run: |
           echo "Checking coverage thresholds..."
@@ -95,9 +95,9 @@ jobs:
       - run: npm ci
       - name: Run integration tests
         run: |
-          npm run test:integration --workspace=@erp/svc-ordenes -- --passWithNoTests
-          npm run test:integration --workspace=@erp/svc-stock -- --passWithNoTests
-          npm run test:integration --workspace=@erp/svc-productos -- --passWithNoTests
+          npm run test:integration --workspace=@erp/svc-ordenes
+          npm run test:integration --workspace=@erp/svc-stock
+          npm run test:integration --workspace=@erp/svc-productos
         env:
           CI: "true"
       - name: Docker info
