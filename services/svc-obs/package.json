@@ -11,8 +11,8 @@
     "type-check": "tsc -b",
     "test": "vitest run --passWithNoTests src",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --passWithNoTests src/domain",
-    "test:unit": "vitest run --passWithNoTests src/domain",
+    "test:coverage": "vitest run --coverage src",
+    "test:unit": "vitest run src",
     "test:integration": "vitest run test/integration"
   },
   "dependencies": {

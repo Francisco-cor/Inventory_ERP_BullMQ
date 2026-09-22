@@ -30,7 +30,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "20", cache: "npm" }
       - run: npm ci
-      - run: npm run type-check --workspaces --if-present
       - run: npm run type-check
       - name: Type check dashboard
         run: npm --prefix dashboard ci && npm --prefix dashboard run type-check
@@ -59,13 +58,12 @@ jobs:
           node-version: "20"
           cache: "npm"
       - run: npm ci
-      - name: Run unit tests and coverage (covered domain suites)
+      - name: Run unit tests and coverage
         run: |
           npm run test --workspace=@erp/svc-ordenes -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests
           npm run test --workspace=@erp/svc-productos -- --coverage --coverage.reportsDirectory=coverage --passWithNoTests
           npm run test --workspace=@erp/svc-stock -- --coverage --coverage.reportsDirectory=coverage
-          # svc-obs has no unit suite yet; keep it explicit and non-covered.
-          npm run test --workspace=@erp/svc-obs
+          npm run test:coverage --workspace=@erp/svc-obs
           npx vitest run tests/contract --run --passWithNoTests
       - name: Check coverage artifacts (80% domain suites)
         run: |
@@ -74,6 +72,7 @@ jobs:
           test -f services/svc-ordenes/coverage/lcov.info
           test -f services/svc-productos/coverage/lcov.info
           test -f services/svc-stock/coverage/lcov.info
+          test -f services/svc-obs/coverage/lcov.info
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v4

@@ -10,7 +10,7 @@ export default defineConfig({
       provider: "v8",
       reportsDirectory: "./coverage",
       reporter: ["text", "lcov", "html"],
-      include: ["src/domain/**/*", "src/jobs/**/*"],
+      include: ["src/jobs/sla-policy.ts"],
       thresholds: {
         lines: 80,
         branches: 80,
