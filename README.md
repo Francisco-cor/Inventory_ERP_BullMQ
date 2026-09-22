@@ -230,6 +230,18 @@ docker compose up --build -d
 make up
 ```
 
+Para staging/producción usa el overlay de secretos externos. Debes materializar previamente
+los secretos Docker con los nombres indicados en `docker-compose.external-secrets.yml`; las
+aplicaciones aceptan `DATABASE_URL_FILE`, `ADMIN_API_KEY_FILE` y `JWT_SECRET_FILE` y nunca
+necesitan copiar esos valores a la definición de Compose:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external-secrets.yml up --build -d
+```
+
+El stack base conserva credenciales de demostración para desarrollo local; no es una
+configuración de producción.
+
 Sin `ADMIN_API_KEY`, los servicios fallan fast-closed en producción. Para desarrollo
 local, `docker compose` usa `NODE_ENV=production` en el stack base, así que conviene
 exportar una clave también; los endpoints de escritura y `/admin/*` la requieren.

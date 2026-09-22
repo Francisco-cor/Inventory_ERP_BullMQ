@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { readFileSync } from "node:fs";
 
 /**
  * Validación centralizada de variables de entorno con Zod.
@@ -35,6 +36,7 @@ const BaseEnvSchema = z
     EVENT_BUS_SERVICES: z.string().optional(),
     OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(10000).default(500),
     OUTBOX_LEASE_MS: z.coerce.number().int().min(1000).max(300000).default(30000),
+    OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(1000).default(20),
 
     // Dependencia temporal de catálogo para validar snapshots de órdenes
     PRODUCTOS_SERVICE_URL: z.string().url().default("http://localhost:3001"),
@@ -72,8 +74,34 @@ const BaseEnvSchema = z
 
 export type Env = z.infer<typeof BaseEnvSchema>;
 
+const FILE_BACKED_SECRETS = ["DATABASE_URL", "ADMIN_API_KEY", "JWT_SECRET"] as const;
+
+export function resolveFileSecrets(raw: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const resolved = { ...raw };
+  for (const name of FILE_BACKED_SECRETS) {
+    if (resolved[name]?.trim()) continue;
+    const file = resolved[`${name}_FILE`];
+    if (!file) continue;
+    try {
+      const value = readFileSync(file, "utf8").trim();
+      if (value) resolved[name] = value;
+    } catch (err) {
+      throw new Error(
+        `[env] No se pudo leer ${name}_FILE (${file}): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+  return resolved;
+}
+
 export function validateEnv(raw: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = BaseEnvSchema.safeParse(raw);
+  const resolved = resolveFileSecrets(raw);
+  if (raw === process.env) {
+    for (const name of FILE_BACKED_SECRETS) {
+      if (resolved[name]) process.env[name] = resolved[name];
+    }
+  }
+  const parsed = BaseEnvSchema.safeParse(resolved);
   if (!parsed.success) {
     const formatted = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
@@ -85,7 +113,11 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): Env {
 
 // Helper para validar sin lanzar, útil en tests
 export function isEnvValid(raw: NodeJS.ProcessEnv = process.env): boolean {
-  return BaseEnvSchema.safeParse(raw).success;
+  try {
+    return BaseEnvSchema.safeParse(resolveFileSecrets(raw)).success;
+  } catch {
+    return false;
+  }
 }
 
 export const envSchema = BaseEnvSchema;

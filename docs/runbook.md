@@ -8,17 +8,18 @@ Todos los comandos asumen que el stack está levantado con Docker Compose.
 ## Índice
 
 1. [Levantar y bajar el stack](#1-levantar-y-bajar-el-stack)
-2. [Dead Letter Queue (DLQ)](#2-dead-letter-queue-dlq)
-3. [Rollback de migración de base de datos](#3-rollback-de-migración-de-base-de-datos)
-4. [SLA Checker](#4-sla-checker)
-5. [Health checks](#5-health-checks)
-6. [Retención y purga de datos](#6-retención-y-purga-de-datos)
-7. [Backup y Restore (PITR)](#7-backup-y-restore-pitr)
-8. [Seeds y fixtures](#8-seeds-y-fixtures)
-9. [Escalado horizontal](#9-escalado-horizontal)
-10. [Graceful shutdown y circuit breaker](#10-graceful-shutdown-y-circuit-breaker)
-11. [Chaos y resiliencia](#11-chaos-y-resiliencia)
-12. [Observabilidad (metrics, traces, logs)](#12-observabilidad-metrics-traces-logs)
+2. [Secretos externos](#2-secretos-externos)
+3. [Dead Letter Queue (DLQ)](#3-dead-letter-queue-dlq)
+4. [Rollback de migración de base de datos](#4-rollback-de-migración-de-base-de-datos)
+5. [SLA Checker](#5-sla-checker)
+6. [Health checks](#6-health-checks)
+7. [Retención y purga de datos](#7-retención-y-purga-de-datos)
+8. [Backup y Restore (PITR)](#8-backup-y-restore-pitr)
+9. [Seeds y fixtures](#9-seeds-y-fixtures)
+10. [Escalado horizontal](#10-escalado-horizontal)
+11. [Graceful shutdown y circuit breaker](#11-graceful-shutdown-y-circuit-breaker)
+12. [Chaos y resiliencia](#12-chaos-y-resiliencia)
+13. [Observabilidad (metrics, traces, logs)](#13-observabilidad-metrics-traces-logs)
 
 ---
 
@@ -77,6 +78,21 @@ make down-v
 
 > **Atención**: esto borra todos los datos persistidos. Usar solo en desarrollo o para reiniciar desde cero.
 
+## 2. Secretos externos
+
+El stack de demostración usa credenciales conocidas. Para staging o producción, crea en el
+gestor de secretos los nombres definidos por `docker-compose.external-secrets.yml` y arranca
+con ese overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external-secrets.yml up -d --build
+```
+
+Los cuatro servicios leen `DATABASE_URL_FILE`, `ADMIN_API_KEY_FILE` y `JWT_SECRET_FILE` desde
+`/run/secrets`. La validación de entorno falla rápido si el archivo no existe o está vacío.
+Rota la API key, JWT y passwords de PostgreSQL en el gestor de secretos; no los pongas en
+`.env`, YAML ni logs.
+
 ### Reiniciar un servicio individual sin bajar todo el stack
 
 ```bash
@@ -110,7 +126,7 @@ npm run format:check
 
 ---
 
-## 2. Dead Letter Queue (DLQ)
+## 3. Dead Letter Queue (DLQ)
 
 Los jobs que agotan sus reintentos (3 intentos con backoff exponencial) quedan en la DLQ de cada servicio. Los endpoints requieren el header `X-Api-Key: <ADMIN_API_KEY>`.
 
@@ -180,7 +196,7 @@ done
 
 ---
 
-## 3. Rollback de migración de base de datos
+## 4. Rollback de migración de base de datos
 
 Cada servicio tiene una función `rollbackLastMigration` en `src/db/migrate.ts` y archivos `*_down.sql` en `migrations/`.
 
@@ -229,7 +245,7 @@ docker compose up -d --build
 
 ---
 
-## 4. SLA Checker
+## 5. SLA Checker
 
 El SLA checker corre en `svc-obs` como BullMQ repeatable job.
 
@@ -254,7 +270,7 @@ El próximo ciclo del worker ejecutará el check sin esperar el TTL.
 
 ---
 
-## 5. Health checks
+## 6. Health checks
 
 Todos los servicios exponen `GET /health` que verifica DB (SELECT 1) y Redis (PING). Devuelve 200 si todo está bien, 503 si algo falla.
 
@@ -298,7 +314,7 @@ curl -s http://localhost:3004/health | jq .
 
 ---
 
-## 6. Retención y purga de datos
+## 7. Retención y purga de datos
 
 Cada servicio purga automáticamente tablas efímeras cada 24h (job `src/jobs/retention.ts`, primera ejecución a los 10s del arranque, luego 24h).
 
@@ -336,7 +352,7 @@ El retention usa `DELETE ... WHERE <ts> < NOW() - INTERVAL '1 day' * $1` sin bat
 
 ---
 
-## 7. Backup y Restore (PITR)
+## 8. Backup y Restore (PITR)
 
 ### Backup
 
@@ -378,7 +394,7 @@ Ver `docs/adr/007-retencion-datos.md` y `scripts/restore.sh`.
 
 ---
 
-## 8. Seeds y fixtures
+## 9. Seeds y fixtures
 
 ### Seed determinístico (5 productos)
 
@@ -402,7 +418,7 @@ Para k6 (Fase 7): `tests/load/order-flow.js` usa `SKU-LARGE-*` y valida confirma
 
 ---
 
-## 9. Escalado horizontal
+## 10. Escalado horizontal
 
 ### SSE con Redis PubSub
 
@@ -464,7 +480,7 @@ Ver `docs/adr/008-resiliencia-escalabilidad.md`.
 
 ---
 
-## 10. Graceful shutdown y circuit breaker
+## 11. Graceful shutdown y circuit breaker
 
 ### Cierre controlado (10s drain)
 
@@ -516,7 +532,7 @@ Ver `services/svc-obs/src/routes/health-aggregate.ts` y `nginx/nginx.conf:176`.
 
 ---
 
-## 11. Chaos y resiliencia
+## 12. Chaos y resiliencia
 
 ### Chaos manual (F5.6)
 
@@ -544,7 +560,7 @@ Ver `docs/adr/008-resiliencia-escalabilidad.md` y `.env.example:66` (`SSE_ADAPTE
 
 ---
 
-## 12. Observabilidad (metrics, traces, logs)
+## 13. Observabilidad (metrics, traces, logs)
 
 ### Stack
 
