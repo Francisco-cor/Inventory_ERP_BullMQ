@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
 import { randomUUID } from "node:crypto";
@@ -26,9 +26,9 @@ import { requireAdmin } from "./plugins/auth.js";
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
-const logger = createLogger({ service: "svc-productos" });
+const logger: FastifyBaseLogger = createLogger({ service: "svc-productos" });
 const metrics = createMetrics("svc-productos");
-const app = Fastify({ logger });
+const app = Fastify({ loggerInstance: logger });
 let metricsUpdater: NodeJS.Timeout | null = null;
 
 async function bootstrap() {

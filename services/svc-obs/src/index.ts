@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import pg from "pg";
 import { registerSecurity } from "@erp/auth";
@@ -33,10 +33,10 @@ const REDIS_HOST = process.env.REDIS_HOST ?? "localhost";
 const REDIS_PORT = Number(process.env.REDIS_PORT ?? 6379);
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
 
-const logger = createLogger({ service: "svc-obs" });
+const logger: FastifyBaseLogger = createLogger({ service: "svc-obs" });
 const metrics = createMetrics("svc-obs");
 
-const app = Fastify({ logger });
+const app = Fastify({ loggerInstance: logger });
 
 let metricsUpdater: NodeJS.Timeout | null = null;
 
