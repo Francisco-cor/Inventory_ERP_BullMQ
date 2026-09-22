@@ -276,7 +276,6 @@ services:
     build:
       context: .
       dockerfile: services/svc-obs/Dockerfile
-    container_name: svc-obs
     restart: unless-stopped
     environment:
       NODE_ENV: production
