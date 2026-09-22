@@ -154,6 +154,8 @@ GET    /api/v1/obs/sla/alerts             → orders with SLA risks
 
 GET    /admin/orders/dlq                  → svc-orders dead-letter queue
 GET    /admin/stock/dlq                   → svc-stock dead-letter queue
+GET    /admin/<service>/outbox-dlq        → durable outbox delivery DLQ
+POST   /admin/<service>/outbox-dlq/:id/retry → replay one outbox delivery
 
 GET    /metrics                           → Prometheus metrics (per service, no auth)
 GET    /health                            → aggregated health (nginx → svc-obs /health/aggregate)

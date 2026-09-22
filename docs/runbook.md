@@ -194,6 +194,33 @@ for JOB_ID in $JOBS; do
 done
 ```
 
+### DLQ durable por destino del outbox
+
+El relay conserva una fila por destino en `outbox_delivery_dlq`. Estas operaciones requieren
+`X-Api-Key` de administrador y permiten inspeccionar o reencolar una entrega sin duplicar las
+entregas que ya fueron confirmadas en otros destinos.
+
+```bash
+# Listar entregas fallidas; sustituir el prefijo según el servicio
+curl -H "X-Api-Key: $ADMIN_API_KEY" \
+  "http://localhost/admin/ordenes/outbox-dlq?limit=50"
+
+# Filtrar por destino y consultar agregados
+curl -H "X-Api-Key: $ADMIN_API_KEY" \
+  "http://localhost/admin/ordenes/outbox-dlq?destination=svc-obs"
+curl -H "X-Api-Key: $ADMIN_API_KEY" \
+  http://localhost/admin/ordenes/outbox-dlq/stats
+
+# Reencolar una entrega; el endpoint reinicia sus intentos y lease
+DELIVERY_ID="<id-bigint>"
+curl -X POST -H "X-Api-Key: $ADMIN_API_KEY" \
+  "http://localhost/admin/ordenes/outbox-dlq/$DELIVERY_ID/retry"
+```
+
+El replay vuelve a dejar el destino en `pending`; el relay lo publica respetando la deduplicación
+por `event.id`. Si existen otros destinos en DLQ, el evento padre permanece `failed` hasta que se
+reencolen y confirmen todos.
+
 ---
 
 ## 4. Rollback de migración de base de datos
