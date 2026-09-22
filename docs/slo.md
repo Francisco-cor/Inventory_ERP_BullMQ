@@ -99,7 +99,7 @@ curl -s http://localhost:3001/metrics | grep http_requests_total
 curl -s http://localhost:9090/api/v1/query?query=histogram_quantile(0.95,sum(rate(order_confirmation_latency_seconds_bucket[5m]))by(le))
 
 # 4. Ver Grafana
-open http://localhost:3005  # admin/admin
+open http://localhost:3005  # base demo: admin/admin; producción: password del secreto externo
 # Dashboard "ERP — Overview" → p95 <2s, lag <1s
 
 # 5. Ver traces

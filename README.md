@@ -242,9 +242,20 @@ necesitan copiar esos valores a la definición de Compose:
 docker compose -f docker-compose.yml -f docker-compose.external-secrets.yml up --build -d
 ```
 
+Con observabilidad y password externo de Grafana:
+
+```bash
+docker compose -f docker-compose.yml \
+  -f docker-compose.external-secrets.yml \
+  -f docker-compose.observability.yml \
+  -f docker-compose.observability.external-secrets.yml up --build -d
+```
+
 El stack base conserva credenciales de demostración para desarrollo local; no es una
 configuración de producción. El overlay externo habilita autenticación de Redis; TLS de Redis
-queda a cargo del proveedor de infraestructura.
+queda a cargo del proveedor de infraestructura. Para Grafana usa además
+`docker-compose.observability.external-secrets.yml`, que lee
+`GF_SECURITY_ADMIN_PASSWORD__FILE` desde un secreto externo.
 
 Sin `ADMIN_API_KEY`, los servicios fallan fast-closed en producción. Para desarrollo
 local, `docker compose` usa `NODE_ENV=production` en el stack base, así que conviene
@@ -264,7 +275,7 @@ curl http://localhost:3001/metrics | head -20  # Prometheus
 # Observabilidad (Fase 6)
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 open http://localhost:9090   # Prometheus
-open http://localhost:3005   # Grafana (admin/admin) — dashboards ERP Overview + Event Bus
+open http://localhost:3005   # Grafana (base demo: admin/admin; overlay externo: secreto) — dashboards ERP Overview + Event Bus
 open http://localhost:3100/ready  # Loki
 open http://localhost:3200/status # Tempo
 

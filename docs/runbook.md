@@ -91,7 +91,9 @@ docker compose -f docker-compose.yml -f docker-compose.external-secrets.yml up -
 Los cuatro servicios leen `DATABASE_URL_FILE`, `ADMIN_API_KEY_FILE`, `JWT_SECRET_FILE` y
 `REDIS_PASSWORD_FILE` desde `/run/secrets`. La validación de entorno falla rápido si el archivo
 no existe o está vacío. Rota la API key, JWT, password de Redis y passwords de PostgreSQL en el
-gestor de secretos; no los pongas en `.env`, YAML ni logs.
+gestor de secretos; no los pongas en `.env`, YAML ni logs. Para Grafana aplica además
+`docker-compose.observability.external-secrets.yml`, que usa el secreto
+`<prefix>_grafana_admin_password`.
 
 ### Reiniciar un servicio individual sin bajar todo el stack
 
@@ -610,7 +612,7 @@ docker compose logs -f svc-obs | jq .
 docker compose -f docker-compose.observability.yml logs -f prometheus grafana
 ```
 
-Servicios: `prometheus:9090`, `grafana:3005` (admin/admin), `loki:3100`, `tempo:3200`, `otel-collector:4317/4318`.
+Servicios: `prometheus:9090`, `grafana:3005` (base demo: admin/admin; producción: secreto externo), `loki:3100`, `tempo:3200`, `otel-collector:4317/4318`.
 
 ### Métricas Prometheus
 
@@ -667,7 +669,7 @@ open http://localhost:3005/explore
 - **Event Bus** (`event-bus.json`, uid `event-bus`): Published/Consumed/Failed rate, by event_name, DLQ, lag <1s, queue depth, Tempo traces.
 
 ```bash
-open http://localhost:3005  # admin/admin
+open http://localhost:3005  # base demo: admin/admin; producción: password del secreto externo
 # Dashboards → ERP — Overview
 # Verificar: p95 <2s y lag <1s en carga 50 VUs (k6)
 ```

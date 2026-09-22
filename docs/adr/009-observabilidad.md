@@ -102,7 +102,9 @@ Se evaluó cómo pasar de `SSE + logs` a 3 pilares (metrics, traces, logs) con S
 **Positivas:**
 
 - `curl localhost:3001/metrics | grep http_requests_total` → RED visible; `prometheus:9090/targets` muestra 4 up.
-- `grafana:3005` (admin/admin) muestra `erp-overview` con `order_confirmation_latency_seconds p95 <2s` (medido con `k6` 50 VUs) y `event_bus_lag <1s`.
+- `grafana:3005` muestra `erp-overview` con `order_confirmation_latency_seconds p95 <2s`
+  (medido con `k6` 50 VUs) y `event_bus_lag <1s`; `admin/admin` solo aplica al Compose base de
+  demostración, mientras producción usa el overlay de secretos.
 - `tempo:3200` + `grafana Explore > Tempo` muestra trace `POST /api/v1/ordenes` → `order.created` → `stock.reservado` → `order.confirmed` con `traceId` propagado vía `traceparent` (OTEL auto).
 - Logs JSON con `correlationId` en `loki:3100` (`{service="svc-obs"} |= "order.created" | json`) y en `stdout` (`{"level":"info","service":"svc-obs","correlationId":"...","msg":"event published"}`).
 - `GET /metrics` sin auth permite scraper interno sin exponer `/admin`.
