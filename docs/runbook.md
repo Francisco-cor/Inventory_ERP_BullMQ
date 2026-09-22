@@ -88,10 +88,10 @@ con ese overlay:
 docker compose -f docker-compose.yml -f docker-compose.external-secrets.yml up -d --build
 ```
 
-Los cuatro servicios leen `DATABASE_URL_FILE`, `ADMIN_API_KEY_FILE` y `JWT_SECRET_FILE` desde
-`/run/secrets`. La validación de entorno falla rápido si el archivo no existe o está vacío.
-Rota la API key, JWT y passwords de PostgreSQL en el gestor de secretos; no los pongas en
-`.env`, YAML ni logs.
+Los cuatro servicios leen `DATABASE_URL_FILE`, `ADMIN_API_KEY_FILE`, `JWT_SECRET_FILE` y
+`REDIS_PASSWORD_FILE` desde `/run/secrets`. La validación de entorno falla rápido si el archivo
+no existe o está vacío. Rota la API key, JWT, password de Redis y passwords de PostgreSQL en el
+gestor de secretos; no los pongas en `.env`, YAML ni logs.
 
 ### Reiniciar un servicio individual sin bajar todo el stack
 
@@ -429,10 +429,11 @@ Para k6 (Fase 7): `tests/load/order-flow.js` usa `SKU-LARGE-*` y valida confirma
 SSE_ADAPTER=redis
 REDIS_HOST=redis
 REDIS_PORT=6379
+REDIS_PASSWORD_FILE=/run/secrets/redis_password
 ```
 
 - `memory`: solo `Map` local (rápido, para dev/tests sin Redis).
-- `redis`: fan-out vía `ioredis` PubSub en `channel sse:broadcast`. Cada réplica mantiene `Map` local, pero `broadcast()` hace `PUBLISH` y cada réplica `SUBSCRIBE` hace `localBroadcast`. Rollback instantáneo: `SSE_ADAPTER=memory`.
+- `redis`: fan-out vía `ioredis` PubSub en `channel sse:broadcast`. Cada réplica mantiene `Map` local, pero `broadcast()` hace `PUBLISH` y cada réplica `SUBSCRIBE` hace `localBroadcast`. El password se toma de `REDIS_PASSWORD`/`REDIS_PASSWORD_FILE`. Rollback instantáneo: `SSE_ADAPTER=memory`.
 
 **Verificar 2 réplicas sin pérdida (F5 criterio):**
 

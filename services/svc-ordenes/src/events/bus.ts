@@ -1,9 +1,11 @@
 import { createEventBus } from "@erp/event-bus";
+import { config } from "../config.js";
 
 export const eventBus = createEventBus({
   serviceName: "svc-ordenes",
   redis: {
-    host: process.env.REDIS_HOST ?? "localhost",
-    port: Number(process.env.REDIS_PORT ?? 6379),
+    host: config.REDIS_HOST,
+    port: config.REDIS_PORT,
+    password: config.REDIS_PASSWORD,
   },
 });

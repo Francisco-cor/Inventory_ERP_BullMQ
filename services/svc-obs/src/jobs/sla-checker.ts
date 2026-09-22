@@ -18,8 +18,16 @@ const LOCK_TTL_MS = Math.max(config.SLA_LOCK_TTL_MS, CHECK_INTERVAL_MS + 10_000)
 let queue: Queue | undefined;
 let worker: Worker | undefined;
 
-export async function startSlaChecker(redis: { host: string; port: number }): Promise<void> {
-  const connection = { host: redis.host, port: redis.port };
+export async function startSlaChecker(redis: {
+  host: string;
+  port: number;
+  password?: string;
+}): Promise<void> {
+  const connection = {
+    host: redis.host,
+    port: redis.port,
+    ...(redis.password ? { password: redis.password } : {}),
+  };
 
   queue = new Queue(QUEUE_NAME, { connection });
 

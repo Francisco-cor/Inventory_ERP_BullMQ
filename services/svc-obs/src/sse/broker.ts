@@ -34,6 +34,7 @@ function localBroadcast(eventType: string, data: unknown): void {
 export async function initSseBroker(opts?: {
   host?: string;
   port?: number;
+  password?: string;
   adapter?: SseAdapter;
 }): Promise<void> {
   if (initialized) return;
@@ -47,12 +48,20 @@ export async function initSseBroker(opts?: {
 
   const host = opts?.host ?? process.env.REDIS_HOST ?? "redis";
   const port = Number(opts?.port ?? process.env.REDIS_PORT ?? 6379);
+  const password = opts?.password ?? process.env.REDIS_PASSWORD;
 
   try {
     const mod: any = await import("ioredis");
     const Redis: any = mod.default ?? mod;
-    pub = new Redis({ host, port, lazyConnect: true, maxRetriesPerRequest: 2 });
-    sub = new Redis({ host, port, lazyConnect: true, maxRetriesPerRequest: 2 });
+    const connection = {
+      host,
+      port,
+      lazyConnect: true,
+      maxRetriesPerRequest: 2,
+      ...(password ? { password } : {}),
+    };
+    pub = new Redis(connection);
+    sub = new Redis(connection);
 
     pub.on("error", (e: any) => console.error("[sse:broker] pub redis error", e.message));
     sub.on("error", (e: any) => console.error("[sse:broker] sub redis error", e.message));

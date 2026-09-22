@@ -7,6 +7,7 @@ import { createLogger } from "@erp/logger";
 export interface RedisConfig {
   host: string;
   port: number;
+  password?: string;
 }
 
 export interface EventBusConfig {
@@ -123,7 +124,11 @@ const JOB_OPTIONS = {
 
 export function createEventBus(config: EventBusConfig) {
   const { serviceName, redis } = config;
-  const connection = { host: redis.host, port: redis.port };
+  const connection = {
+    host: redis.host,
+    port: redis.port,
+    ...(redis.password ? { password: redis.password } : {}),
+  };
   const logger = createLogger({ service: serviceName });
 
   // One publish queue per service for fan-out — dynamic via EVENT_BUS_SERVICES

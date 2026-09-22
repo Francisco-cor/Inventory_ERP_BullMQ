@@ -47,11 +47,11 @@ Trust boundary principal: **Nginx** (edge) → **Fastify** (app) → **PG/Redis*
 
 ### I — Information Disclosure
 
-| Amenaza                                      | Mitigación                                                                                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Exposición de `DATABASE_URL`/`ADMIN_API_KEY` | `.env` gitignored, `.env.example` con placeholders; `@erp/env` no loggea secrets (replace `:***@`)                |
-| Swagger expone internals                     | `registerSwagger` solo en `/docs`, Nginx no expone sin auth? Actualmente público; Fase 11 restringirá por `admin` |
-| Error 500 filtra stack                       | `app.setErrorHandler` retorna `InternalServerError` genérico, loggea con `pino` interno                           |
+| Amenaza                                      | Mitigación                                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Exposición de `DATABASE_URL`/`ADMIN_API_KEY` | `.env` gitignored, `.env.example` con placeholders; `@erp/env` no loggea secrets (replace `:***@`)           |
+| Swagger expone internals                     | `/docs` y `/docs/json` usan `requireAdmin`; Nginx no debe publicar el acceso administrativo sin credenciales |
+| Error 500 filtra stack                       | `app.setErrorHandler` retorna `InternalServerError` genérico, loggea con `pino` interno                      |
 
 ### D — Denial of Service
 

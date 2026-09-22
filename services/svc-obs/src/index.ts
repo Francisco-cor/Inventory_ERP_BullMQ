@@ -31,6 +31,7 @@ const PORT = Number(process.env.PORT ?? 3004);
 const HOST = process.env.HOST ?? "0.0.0.0";
 const REDIS_HOST = process.env.REDIS_HOST ?? "localhost";
 const REDIS_PORT = Number(process.env.REDIS_PORT ?? 6379);
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
 
 const logger = createLogger({ service: "svc-obs" });
 const metrics = createMetrics("svc-obs");
@@ -51,7 +52,7 @@ async function bootstrap(): Promise<void> {
     await client.end();
   }
 
-  await initSseBroker({ host: REDIS_HOST, port: REDIS_PORT });
+  await initSseBroker({ host: REDIS_HOST, port: REDIS_PORT, password: REDIS_PASSWORD });
 
   // Correlation hook (must be before other hooks)
   app.addHook("onRequest", async (request, reply) => {
@@ -117,6 +118,7 @@ async function bootstrap(): Promise<void> {
       connection: {
         host: process.env.REDIS_HOST ?? "redis",
         port: Number(process.env.REDIS_PORT ?? 6379),
+        password: process.env.REDIS_PASSWORD || undefined,
       },
     });
     createBullBoard({ queues: [new BullMQAdapter(q)], serverAdapter });
@@ -132,7 +134,7 @@ async function bootstrap(): Promise<void> {
   startEventConsumer();
   startOutboxRelay();
   startRetentionJob();
-  await startSlaChecker({ host: REDIS_HOST, port: REDIS_PORT });
+  await startSlaChecker({ host: REDIS_HOST, port: REDIS_PORT, password: REDIS_PASSWORD });
 
   // Metrics updater (pool, outbox, SSE)
   metricsUpdater = startMetricsUpdater(metrics, "svc-obs", {

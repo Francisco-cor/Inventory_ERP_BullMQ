@@ -21,6 +21,7 @@ const BaseEnvSchema = z
       ),
     REDIS_HOST: z.string().min(1).default("redis"),
     REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
+    REDIS_PASSWORD: z.string().optional(),
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
@@ -74,7 +75,12 @@ const BaseEnvSchema = z
 
 export type Env = z.infer<typeof BaseEnvSchema>;
 
-const FILE_BACKED_SECRETS = ["DATABASE_URL", "ADMIN_API_KEY", "JWT_SECRET"] as const;
+const FILE_BACKED_SECRETS = [
+  "DATABASE_URL",
+  "ADMIN_API_KEY",
+  "JWT_SECRET",
+  "REDIS_PASSWORD",
+] as const;
 
 export function resolveFileSecrets(raw: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const resolved = { ...raw };
